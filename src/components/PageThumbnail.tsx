@@ -1,8 +1,13 @@
 import { useEffect, useRef } from 'react';
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { getGridClass, getSlotCount } from '../utils/layout';
+import {
+  getDisplayFrameLayout,
+  getDisplayPhotoFrameImageStyle,
+  getFrameLayout,
+  getGridClass,
+  getSlotCount,
+} from '../utils/layout';
 import type { PageData, ProjectSettings } from '../types';
+import { A4_PAGE_HEIGHT, A4_PAGE_WIDTH, DEFAULT_STAMP_SIZE } from '../utils/stamps';
 
 interface Props {
   page: PageData;
@@ -15,30 +20,15 @@ interface Props {
 
 export function PageThumbnail({ page, pageIndex, settings, isSelected, noTitleLabel, onClick }: Props) {
   const wasDraggingRef = useRef(false);
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: page.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 50 : 'auto',
-    opacity: isDragging ? 0.5 : 1,
-  };
 
   const slots = Array.from({ length: getSlotCount(page.layout) }, (_, index) => index);
+  const frameLayout = getFrameLayout(page.layout);
+  const displayFrameLayout = frameLayout ? getDisplayFrameLayout(frameLayout, page.spreadSide) : null;
 
   useEffect(() => {
     let resetTimer: number | undefined;
 
-    if (isDragging) {
-      wasDraggingRef.current = true;
-    } else if (wasDraggingRef.current) {
+    if (wasDraggingRef.current) {
       resetTimer = window.setTimeout(() => {
         wasDraggingRef.current = false;
       }, 0);
@@ -49,7 +39,7 @@ export function PageThumbnail({ page, pageIndex, settings, isSelected, noTitleLa
         window.clearTimeout(resetTimer);
       }
     };
-  }, [isDragging]);
+  });
 
   const handleClick = () => {
     if (wasDraggingRef.current) return;
@@ -57,15 +47,9 @@ export function PageThumbnail({ page, pageIndex, settings, isSelected, noTitleLa
   };
 
   return (
-    <div 
-      ref={setNodeRef}
-      style={style}
-      className="relative"
-    >
+    <div className="relative">
       <div 
         onClick={handleClick}
-        {...attributes}
-        {...listeners}
         className={`relative cursor-grab active:cursor-grabbing group transition-all ${isSelected ? 'ring-4 ring-blue-500 ring-offset-4' : 'hover:ring-2 hover:ring-blue-300 hover:ring-offset-2'}`}
         style={{ width: '100%', aspectRatio: '794/1123' }}
       >
@@ -93,6 +77,58 @@ export function PageThumbnail({ page, pageIndex, settings, isSelected, noTitleLa
                 )}
               </div>
             </div>
+          ) : displayFrameLayout ? (
+            <div className="absolute inset-0">
+              {displayFrameLayout.textFrames.map((frame, index) => (
+                <div
+                  key={`text-${index}`}
+                  className="absolute border border-dashed border-gray-200 bg-white/20"
+                  style={{
+                    left: `${(frame.x / displayFrameLayout.sourceWidth) * 100}%`,
+                    top: `${(frame.y / displayFrameLayout.sourceHeight) * 100}%`,
+                    width: `${(frame.width / displayFrameLayout.sourceWidth) * 100}%`,
+                    height: `${(frame.height / displayFrameLayout.sourceHeight) * 100}%`,
+                  }}
+                />
+              ))}
+
+              {displayFrameLayout.frames.map((frame) => {
+                const slotIndex = frame.slotIndex;
+                const photo = page.photos[slotIndex];
+                return (
+                  <div
+                    key={slotIndex}
+                    className="absolute overflow-hidden bg-gray-100 flex items-center justify-center"
+                    style={{
+                      left: `${(frame.x / displayFrameLayout.sourceWidth) * 100}%`,
+                      top: `${(frame.y / displayFrameLayout.sourceHeight) * 100}%`,
+                      width: `${(frame.width / displayFrameLayout.sourceWidth) * 100}%`,
+                      height: `${(frame.height / displayFrameLayout.sourceHeight) * 100}%`,
+                    }}
+                  >
+                    {photo ? (
+                      <div
+                        className="absolute"
+                        style={getDisplayPhotoFrameImageStyle(frame)}
+                      >
+                        <img
+                          src={photo.url}
+                          loading="lazy"
+                          className={`w-full h-full ${photo.fit === 'contain' ? 'object-contain' : ''}`}
+                          style={photo.fit !== 'contain' ? {
+                            objectFit: 'cover',
+                            transform: `translate(${photo.offset?.x ? photo.offset.x * 0.1 : 0}px, ${photo.offset?.y ? photo.offset.y * 0.1 : 0}px) scale(${photo.scale || 1})`,
+                          } : {}}
+                          alt=""
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-full h-full bg-gray-50" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           ) : (
             <div className={`w-full h-full grid gap-[4%] p-[5%] ${getGridClass(page.layout)}`}>
               {slots.map((slotIndex) => {
@@ -119,6 +155,23 @@ export function PageThumbnail({ page, pageIndex, settings, isSelected, noTitleLa
               })}
             </div>
           )}
+
+          {page.stamps?.map((stamp) => (
+            <img
+              key={stamp.instanceId}
+              src={stamp.imageUrl}
+              loading="lazy"
+              alt=""
+              className="absolute h-auto select-none"
+              style={{
+                left: `${(stamp.x / A4_PAGE_WIDTH) * 100}%`,
+                top: `${(stamp.y / A4_PAGE_HEIGHT) * 100}%`,
+                width: `${(((stamp.size ?? DEFAULT_STAMP_SIZE) * stamp.scale) / A4_PAGE_WIDTH) * 100}%`,
+                transform: `rotate(${stamp.rotate}deg)`,
+                zIndex: stamp.zIndex,
+              }}
+            />
+          ))}
         </div>
         
         {/* Page Number Badge */}

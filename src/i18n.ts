@@ -1,4 +1,4 @@
-import type { LayoutType, UILanguage } from './types';
+import type { UILanguage } from './types';
 
 export interface ExportMessages {
   hiddenContainerMissing: string;
@@ -21,16 +21,48 @@ export interface AppText {
   undo: string;
   redo: string;
   sidebarTabs: {
-    edit: string;
+    page: string;
+    layout: string;
     text: string;
+    stamp: string;
     export: string;
   };
+  stampPanelTitle: string;
+  stampLoading: string;
+  stampLoadFailed: string;
+  stampEmpty: string;
+  stampResultCount: (count: number) => string;
   backgroundColor: string;
   backgroundColorNames: Record<string, string>;
   customBackgroundColor: string;
+  printWarrantyGuide: string;
   layout: string;
-  layoutLabels: Record<LayoutType, string>;
+  layoutLabels: Record<string, string>;
+  layoutFilters: {
+    page: string;
+    all: string;
+    onePage: string;
+    twoPage: string;
+    cover: string;
+    title: string;
+    colophon: string;
+  };
+  layoutBadges: {
+    onePage: string;
+    twoPage: string;
+    photoCount: (count: number) => string;
+    textCount: (count: number) => string;
+    objectLayer: string;
+    nonSelectable: string;
+  };
+  layoutResultCount: (count: number) => string;
+  layoutLoading: string;
+  layoutLoadFailed: string;
+  retry: string;
   pageManagement: (count: number) => string;
+  bodyPageCount: string;
+  bodyPageCountOption: (count: number) => string;
+  totalPageCount: (count: number) => string;
   overviewOpen: string;
   previousPage: string;
   nextPage: string;
@@ -83,6 +115,12 @@ export interface AppText {
   noTitle: string;
   coverTitlePlaceholder: string;
   coverDatePlaceholder: string;
+  layoutTextPlaceholders: {
+    title: string;
+    subtitle: string;
+    message: string;
+    default: string;
+  };
   coverPhotoDropLabel: string;
   coverPhotoAlt: string;
   photoCaptionPlaceholder: string;
@@ -117,10 +155,17 @@ export const TRANSLATIONS: Record<UILanguage, AppText> = {
     undo: '취소',
     redo: '복구',
     sidebarTabs: {
-      edit: '편집',
+      page: '페이지',
+      layout: '레이아웃',
       text: '텍스트',
+      stamp: '스탬프',
       export: '저장',
     },
+    stampPanelTitle: '스탬프',
+    stampLoading: '스탬프 불러오는 중',
+    stampLoadFailed: '스탬프를 불러오지 못했습니다',
+    stampEmpty: '이 페이지에서 사용할 수 있는 스탬프가 없습니다',
+    stampResultCount: (count) => `${count}개`,
     backgroundColor: '전체 배경색',
     backgroundColorNames: {
       '#ffffff': '흰색',
@@ -131,6 +176,7 @@ export const TRANSLATIONS: Record<UILanguage, AppText> = {
       '#fff9e6': '옐로우',
     },
     customBackgroundColor: '직접 배경색 선택',
+    printWarrantyGuide: '인쇄 보증 외 표시',
     layout: '페이지 레이아웃',
     layoutLabels: {
       cover: '표지 (Cover)',
@@ -143,8 +189,36 @@ export const TRANSLATIONS: Record<UILanguage, AppText> = {
       '4-top': '4장 (상단 강조)',
       '5-grid': '5장',
       '6-grid': '6장',
+      'imported-a4-1': '샘플 1장',
+      'imported-a4-2': '샘플 2장',
+      'imported-a4-3': '샘플 3장',
+      'imported-a4-4': '샘플 4장',
     },
+    layoutFilters: {
+      page: '본문',
+      all: '전체',
+      onePage: '1페이지',
+      twoPage: '2페이지',
+      cover: '표지',
+      title: '타이틀',
+      colophon: '콜로폰',
+    },
+    layoutBadges: {
+      onePage: '1P',
+      twoPage: '2P 펼침면',
+      photoCount: (count) => `사진 ${count}`,
+      textCount: (count) => `텍스트 ${count}`,
+      objectLayer: '오브젝트',
+      nonSelectable: '비선택',
+    },
+    layoutResultCount: (count) => `${count}개`,
+    layoutLoading: '레이아웃 불러오는 중',
+    layoutLoadFailed: '레이아웃을 불러오지 못했습니다',
+    retry: '다시 시도',
     pageManagement: (count) => `페이지 관리 (${count}장)`,
+    bodyPageCount: '본문 페이지 수',
+    bodyPageCountOption: (count) => `${count}장`,
+    totalPageCount: (count) => `전체 ${count}장`,
     overviewOpen: '전체 보기',
     previousPage: '이전 페이지로 이동',
     nextPage: '다음 페이지로 이동',
@@ -197,6 +271,12 @@ export const TRANSLATIONS: Record<UILanguage, AppText> = {
     noTitle: 'No Title',
     coverTitlePlaceholder: '포토북 제목 (예: 우리 아이 1년의 기록)',
     coverDatePlaceholder: '날짜 (예: 2026.05.01)',
+    layoutTextPlaceholders: {
+      title: '제목',
+      subtitle: '부제목',
+      message: '텍스트 입력',
+      default: '텍스트 입력',
+    },
     coverPhotoDropLabel: '드래그하여 표지 사진 넣기',
     coverPhotoAlt: '표지 사진',
     photoCaptionPlaceholder: '사진 설명을 입력하세요 (한 줄)',
@@ -236,10 +316,17 @@ export const TRANSLATIONS: Record<UILanguage, AppText> = {
     undo: '元に戻す',
     redo: 'やり直し',
     sidebarTabs: {
-      edit: '編集',
+      page: 'ページ',
+      layout: 'レイアウト',
       text: 'テキスト',
+      stamp: 'スタンプ',
       export: '保存',
     },
+    stampPanelTitle: 'スタンプ',
+    stampLoading: 'スタンプを読み込み中',
+    stampLoadFailed: 'スタンプを読み込めませんでした',
+    stampEmpty: 'このページで使えるスタンプはありません',
+    stampResultCount: (count) => `${count}件`,
     backgroundColor: '全体の背景色',
     backgroundColorNames: {
       '#ffffff': '白',
@@ -250,6 +337,7 @@ export const TRANSLATIONS: Record<UILanguage, AppText> = {
       '#fff9e6': 'イエロー',
     },
     customBackgroundColor: '背景色を選択',
+    printWarrantyGuide: '印刷保証外',
     layout: 'ページレイアウト',
     layoutLabels: {
       cover: '表紙 (Cover)',
@@ -262,8 +350,36 @@ export const TRANSLATIONS: Record<UILanguage, AppText> = {
       '4-top': '4枚 (上を強調)',
       '5-grid': '5枚',
       '6-grid': '6枚',
+      'imported-a4-1': 'サンプル 1枚',
+      'imported-a4-2': 'サンプル 2枚',
+      'imported-a4-3': 'サンプル 3枚',
+      'imported-a4-4': 'サンプル 4枚',
     },
+    layoutFilters: {
+      page: '本文',
+      all: '全て',
+      onePage: '1ページ',
+      twoPage: '2ページ',
+      cover: '表紙',
+      title: 'タイトル',
+      colophon: '奥付',
+    },
+    layoutBadges: {
+      onePage: '1P',
+      twoPage: '2P 見開き',
+      photoCount: (count) => `写真 ${count}`,
+      textCount: (count) => `テキスト ${count}`,
+      objectLayer: 'オブジェクト',
+      nonSelectable: '非選択',
+    },
+    layoutResultCount: (count) => `${count}件`,
+    layoutLoading: 'レイアウトを読み込み中',
+    layoutLoadFailed: 'レイアウトを読み込めませんでした',
+    retry: '再試行',
     pageManagement: (count) => `ページ管理 (${count}枚)`,
+    bodyPageCount: '本文ページ数',
+    bodyPageCountOption: (count) => `${count}枚`,
+    totalPageCount: (count) => `全体 ${count}枚`,
     overviewOpen: '一覧',
     previousPage: '前のページへ移動',
     nextPage: '次のページへ移動',
@@ -316,6 +432,12 @@ export const TRANSLATIONS: Record<UILanguage, AppText> = {
     noTitle: 'タイトルなし',
     coverTitlePlaceholder: 'フォトブックのタイトル (例: 家族の思い出)',
     coverDatePlaceholder: '日付 (例: 2026年5月1日)',
+    layoutTextPlaceholders: {
+      title: 'タイトル',
+      subtitle: 'サブタイトル',
+      message: 'テキストを入力',
+      default: 'テキストを入力',
+    },
     coverPhotoDropLabel: 'ドラッグして表紙写真を追加',
     coverPhotoAlt: '表紙写真',
     photoCaptionPlaceholder: '写真の説明を入力してください (1行)',

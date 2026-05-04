@@ -13,10 +13,13 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   rectSortingStrategy,
+  useSortable,
 } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { PageThumbnail } from './PageThumbnail';
 import type { AppText } from '../i18n';
 import { useProjectStore } from '../store/useProjectStore';
+import { getPageSpreads, type PageSpread } from '../utils/layout';
 
 interface Props {
   isOpen: boolean;
@@ -24,8 +27,63 @@ interface Props {
   onClose: () => void;
 }
 
+function SortableSpreadThumbnail({
+  spread,
+  settings,
+  currentPageIndex,
+  noTitleLabel,
+  onPageClick,
+}: {
+  spread: PageSpread;
+  settings: ReturnType<typeof useProjectStore.getState>['settings'];
+  currentPageIndex: number;
+  noTitleLabel: string;
+  onPageClick: (index: number) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: spread.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : 'auto',
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={`relative grid gap-3 ${spread.pages.length > 1 ? 'grid-cols-2' : 'grid-cols-1 max-w-[180px]'}`}
+    >
+      {spread.pages.map((page, offset) => {
+        const pageIndex = spread.pageIndexes[offset];
+        return (
+          <PageThumbnail
+            key={page.id}
+            page={page}
+            pageIndex={pageIndex}
+            settings={settings}
+            isSelected={pageIndex === currentPageIndex}
+            noTitleLabel={noTitleLabel}
+            onClick={() => onPageClick(pageIndex)}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 export function OverviewModal({ isOpen, text, onClose }: Props) {
   const { pages, settings, currentPageIndex, setCurrentPageIndex, reorderPages } = useProjectStore();
+  const pageSpreads = getPageSpreads(pages);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -62,7 +120,11 @@ export function OverviewModal({ isOpen, text, onClose }: Props) {
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
-      reorderPages(active.id as string, over.id as string);
+      const activeSpread = pageSpreads.find((spread) => spread.id === active.id);
+      const overSpread = pageSpreads.find((spread) => spread.id === over.id);
+      if (activeSpread && overSpread) {
+        reorderPages(activeSpread.pages[0].id, overSpread.pages[0].id);
+      }
     }
   };
 
@@ -105,19 +167,18 @@ export function OverviewModal({ isOpen, text, onClose }: Props) {
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={pages.map((p) => p.id)}
+              items={pageSpreads.map((spread) => spread.id)}
               strategy={rectSortingStrategy}
             >
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 md:gap-8">
-                {pages.map((page, index) => (
-                  <PageThumbnail
-                    key={page.id}
-                    page={page}
-                    pageIndex={index}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
+                {pageSpreads.map((spread) => (
+                  <SortableSpreadThumbnail
+                    key={spread.id}
+                    spread={spread}
                     settings={settings}
-                    isSelected={index === currentPageIndex}
+                    currentPageIndex={currentPageIndex}
                     noTitleLabel={text.noTitle}
-                    onClick={() => handlePageClick(index)}
+                    onPageClick={handlePageClick}
                   />
                 ))}
               </div>

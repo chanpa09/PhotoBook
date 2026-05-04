@@ -3,11 +3,13 @@ import type { TextLanguage, TextStyle } from '../types';
 export type TextTarget =
   | { type: 'coverTitle'; pageId: string }
   | { type: 'coverDate'; pageId: string }
-  | { type: 'caption'; pageId: string; photoIndex: number };
+  | { type: 'caption'; pageId: string; photoIndex: number }
+  | { type: 'layoutText'; pageId: string; textIndex: number };
 
 export const DEFAULT_COVER_TITLE_FONT_SIZE = 48;
 export const DEFAULT_COVER_DATE_FONT_SIZE = 24;
 export const DEFAULT_CAPTION_FONT_SIZE = 18;
+export const DEFAULT_LAYOUT_TEXT_FONT_SIZE = 24;
 
 export const KOREAN_FONT_STACK = 'Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
 export const JAPANESE_FONT_STACK = '"Meiryo", "Yu Gothic", "Hiragino Sans", "Noto Sans JP", sans-serif';

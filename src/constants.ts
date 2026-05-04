@@ -1,6 +1,6 @@
-import type { LayoutType, PageData, ProjectSettings } from './types';
+import type { BuiltInLayoutType, LayoutType, PageData, ProjectSettings } from './types';
 
-export const LAYOUT_OPTIONS: { id: LayoutType; label: string }[] = [
+export const BUILT_IN_LAYOUT_OPTIONS: { id: BuiltInLayoutType; label: string }[] = [
   { id: 'cover', label: '표지 (Cover)' },
   { id: '1', label: '1장' },
   { id: '2-row', label: '2장 (위아래)' },
@@ -13,6 +13,10 @@ export const LAYOUT_OPTIONS: { id: LayoutType; label: string }[] = [
   { id: '6-grid', label: '6장' },
 ];
 
+export const LAYOUT_OPTIONS: { id: LayoutType; label: string }[] = [
+  ...BUILT_IN_LAYOUT_OPTIONS,
+];
+
 export const BACKGROUND_COLORS = [
   { id: '#ffffff', name: 'White' },
   { id: '#fdfbf7', name: 'Cream' },
@@ -22,15 +26,23 @@ export const BACKGROUND_COLORS = [
   { id: '#fff9e6', name: 'Yellow' },
 ];
 
+export const BODY_PAGE_COUNT_OPTIONS = [22, 34, 46, 70, 94, 142] as const;
+
 export const STORAGE_KEY_PAGES = 'photobook_pages_v1';
 export const STORAGE_KEY_SETTINGS = 'photobook_settings_v1';
 
 export const DEFAULT_SETTINGS: ProjectSettings = {
   backgroundColor: '#ffffff',
   uiLanguage: 'ko',
+  showPrintWarrantyGuide: true,
 };
 
 export const createDefaultPages = (): PageData[] => [
-  { id: crypto.randomUUID(), layout: 'cover', photos: [] },
-  { id: crypto.randomUUID(), layout: '1', photos: [] },
+  { id: crypto.randomUUID(), layout: 'cover', photos: [], stamps: [] },
+  ...Array.from({ length: BODY_PAGE_COUNT_OPTIONS[0] }, () => ({
+    id: crypto.randomUUID(),
+    layout: '1' as const,
+    photos: [],
+    stamps: [],
+  })),
 ];

@@ -1,11 +1,11 @@
-import type { ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { DragEvent, ReactNode } from 'react';
 import { useStore } from 'zustand';
 import {
   ArrowDown,
   ArrowUp,
-  ChevronLeft,
-  ChevronRight,
   Download,
+  FileText,
   Image as ImageIcon,
   LayoutGrid,
   Loader2,
@@ -14,24 +14,24 @@ import {
   RotateCcw,
   RotateCw,
   Settings,
-  Trash2,
+  Sticker,
   Type,
   X,
 } from 'lucide-react';
-import { BACKGROUND_COLORS, LAYOUT_OPTIONS } from '../constants';
+import { BACKGROUND_COLORS, BODY_PAGE_COUNT_OPTIONS } from '../constants';
 import type { AppText } from '../i18n';
-import type { TextStyle } from '../types';
+import type { FrameLayoutDefinition, LayoutType, StampAsset, TextStyle } from '../types';
 import type { TextTarget } from '../utils/textStyle';
 import { FONT_OPTIONS, LANGUAGE_OPTIONS } from '../utils/textStyle';
+import { getFrameLayout, getSpreadStartIndex } from '../utils/layout';
 import { useProjectStore } from '../store/useProjectStore';
+import { serializeStampDragData, STAMP_DRAG_MIME_TYPE } from '../utils/stamps';
 
 interface Props {
   text: AppText;
   isExporting: boolean;
   activePanel: SidebarPanel;
   onActivePanelChange: (panel: SidebarPanel) => void;
-  onRequestDeletePage: () => void;
-  onOpenOverview: () => void;
   onOpenSettings: () => void;
   onExport: (format: 'png' | 'jpeg') => void;
   selectedTextStyle: { target: TextTarget; style: Required<TextStyle> } | null;
@@ -40,15 +40,72 @@ interface Props {
   onClose: () => void;
 }
 
-export type SidebarPanel = 'edit' | 'text' | 'export';
+export type SidebarPanel = 'page' | 'layout' | 'text' | 'stamp' | 'export';
+type LayoutFilter = 'page' | 'all' | 'onePage' | 'twoPage' | 'cover' | 'title' | 'colophon';
+type StampStatus = 'idle' | 'loading' | 'ready' | 'error';
+type StampManifest = { stamps?: StampAsset[] };
+
+function ImportedLayoutPreview({ layoutId }: { layoutId: LayoutType }) {
+  const frameLayout = getFrameLayout(layoutId);
+  if (!frameLayout) return null;
+
+  return (
+    <span
+      className="relative mt-1 block w-14 overflow-hidden rounded-sm border border-gray-200 bg-white"
+      style={{ aspectRatio: `${frameLayout.sourceWidth}/${frameLayout.sourceHeight}` }}
+      aria-hidden="true"
+    >
+      {frameLayout.textFrames?.map((frame, index) => (
+        <span
+          key={`text-${index}`}
+          className="absolute border border-dashed border-gray-300 bg-white/20"
+          style={{
+            left: `${(frame.x / frameLayout.sourceWidth) * 100}%`,
+            top: `${(frame.y / frameLayout.sourceHeight) * 100}%`,
+            width: `${(frame.width / frameLayout.sourceWidth) * 100}%`,
+            height: `${(frame.height / frameLayout.sourceHeight) * 100}%`,
+          }}
+        />
+      ))}
+      {frameLayout.frames.map((frame, index) => (
+        <span
+          key={`photo-${index}`}
+          className="absolute bg-gray-300"
+          style={{
+            left: `${(frame.x / frameLayout.sourceWidth) * 100}%`,
+            top: `${(frame.y / frameLayout.sourceHeight) * 100}%`,
+            width: `${(frame.width / frameLayout.sourceWidth) * 100}%`,
+            height: `${(frame.height / frameLayout.sourceHeight) * 100}%`,
+          }}
+        />
+      ))}
+    </span>
+  );
+}
+
+function importedLayoutMatchesFilter(layout: FrameLayoutDefinition, filter: LayoutFilter) {
+  switch (filter) {
+    case 'all':
+      return true;
+    case 'onePage':
+      return layout.pageCount !== 2;
+    case 'twoPage':
+      return layout.pageCount === 2;
+    case 'cover':
+    case 'title':
+    case 'colophon':
+      return layout.templateType === filter;
+    case 'page':
+    default:
+      return layout.templateType === 'page';
+  }
+}
 
 export function Sidebar({
   text,
   isExporting,
   activePanel,
   onActivePanelChange,
-  onRequestDeletePage,
-  onOpenOverview,
   onOpenSettings,
   onExport,
   selectedTextStyle,
@@ -60,19 +117,83 @@ export function Sidebar({
     pages,
     settings,
     currentPageIndex,
-    setCurrentPageIndex,
+    importedLayouts,
+    importedLayoutStatus,
+    loadImportedLayouts,
     setSettings,
+    setBodyPageCount,
     updateLayout,
     movePage,
-    addPage,
   } = useProjectStore();
   
   const { undo, redo, pastStates, futureStates } = useStore(useProjectStore.temporal);
   
   const pagesLength = pages.length;
   const currentPage = pages[currentPageIndex] || pages[0];
+  const bodyPageCount = Math.max(0, pagesLength - 1);
+  const canMoveSpreadUp = getSpreadStartIndex(currentPageIndex) > 1;
+  const canMoveSpreadDown = currentPageIndex > 0 && getSpreadStartIndex(currentPageIndex) + 1 < pagesLength - 1;
   const canUndo = pastStates.length > 0;
   const canRedo = futureStates.length > 0;
+  const [layoutFilter, setLayoutFilter] = useState<LayoutFilter>('page');
+  const [stampAssets, setStampAssets] = useState<StampAsset[]>([]);
+  const [stampStatus, setStampStatus] = useState<StampStatus>('idle');
+  const isCoverPage = currentPageIndex === 0;
+  const activeLayoutFilter = isCoverPage ? 'cover' : layoutFilter === 'cover' ? 'page' : layoutFilter;
+  const filteredImportedLayouts = useMemo(
+    () => importedLayouts.filter((layout) => {
+      if (isCoverPage) return layout.templateType === 'cover';
+      if (layout.templateType === 'cover') return false;
+      return importedLayoutMatchesFilter(layout, activeLayoutFilter);
+    }),
+    [activeLayoutFilter, importedLayouts, isCoverPage],
+  );
+  const layoutFilterOptions: { id: LayoutFilter; label: string }[] = isCoverPage
+    ? [{ id: 'cover', label: text.layoutFilters.cover }]
+    : [
+      { id: 'page', label: text.layoutFilters.page },
+      { id: 'all', label: text.layoutFilters.all },
+      { id: 'onePage', label: text.layoutFilters.onePage },
+      { id: 'twoPage', label: text.layoutFilters.twoPage },
+      { id: 'title', label: text.layoutFilters.title },
+      { id: 'colophon', label: text.layoutFilters.colophon },
+    ];
+
+  useEffect(() => {
+    if (activePanel === 'layout' && importedLayoutStatus === 'idle') {
+      void loadImportedLayouts();
+    }
+  }, [activePanel, importedLayoutStatus, loadImportedLayouts]);
+
+  useEffect(() => {
+    if (activePanel !== 'stamp' || stampStatus !== 'idle') return;
+
+    const loadStamps = async () => {
+      setStampStatus('loading');
+      try {
+        const response = await fetch('/data/stamps/stamps.json');
+        if (!response.ok) {
+          throw new Error(`Failed to load stamps: ${response.status}`);
+        }
+        const manifest = await response.json() as StampManifest;
+        setStampAssets(manifest.stamps ?? []);
+        setStampStatus('ready');
+      } catch (error) {
+        console.error('Failed to load stamps', error);
+        setStampStatus('error');
+      }
+    };
+
+    void loadStamps();
+  }, [activePanel, stampStatus]);
+
+  const retryLoadStamps = () => {
+    setStampStatus('idle');
+  };
+  const handleStampDragStart = (event: DragEvent<HTMLButtonElement>, stamp: StampAsset) => {
+    event.dataTransfer.effectAllowed = 'copy';
+    event.dataTransfer.setData(STAMP_DRAG_MIME_TYPE, serializeStampDragData(stamp));
+  };
   
   const updateFontSize = (value: string) => {
     const parsedValue = Number(value);
@@ -116,10 +237,15 @@ export function Sidebar({
         return text.languageOptions.auto;
     }
   };
-  const visibleActivePanel = activePanel === 'text' && !selectedTextStyle ? 'edit' : activePanel;
+  const visibleActivePanel = activePanel === 'text' && !selectedTextStyle ? 'page' : activePanel;
+  const filteredStampAssets = stampAssets.filter((stamp) => (
+    isCoverPage ? stamp.isCover : stamp.isPage
+  ));
   const panels: { id: SidebarPanel; label: string; icon: ReactNode; disabled?: boolean }[] = [
-    { id: 'edit', label: text.sidebarTabs.edit, icon: <LayoutGrid size={14} /> },
+    { id: 'page', label: text.sidebarTabs.page, icon: <FileText size={14} /> },
+    { id: 'layout', label: text.sidebarTabs.layout, icon: <LayoutGrid size={14} /> },
     { id: 'text', label: text.sidebarTabs.text, icon: <Type size={14} />, disabled: !selectedTextStyle },
+    { id: 'stamp', label: text.sidebarTabs.stamp, icon: <Sticker size={14} /> },
     { id: 'export', label: text.sidebarTabs.export, icon: <Download size={14} /> },
   ];
 
@@ -179,7 +305,7 @@ export function Sidebar({
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-1 mb-3 rounded-lg bg-gray-100 p-1 shrink-0">
+      <div className="grid grid-cols-5 gap-1 mb-3 rounded-lg bg-gray-100 p-1 shrink-0">
         {panels.map((panel) => (
           <button
             key={panel.id}
@@ -201,7 +327,7 @@ export function Sidebar({
         ))}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
         {visibleActivePanel === 'text' && (
           <div className="bg-gray-50 p-3 rounded-lg border border-gray-100" data-text-settings-panel>
             <h2 className="text-xs font-semibold text-gray-700 mb-2">{text.textSettings}</h2>
@@ -285,7 +411,7 @@ export function Sidebar({
           </div>
         )}
 
-        {visibleActivePanel === 'edit' && (
+        {visibleActivePanel === 'page' && (
           <div className="flex flex-col gap-3">
             <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
               <h2 className="text-xs font-semibold text-gray-700 flex items-center gap-2 mb-2">
@@ -330,65 +456,51 @@ export function Sidebar({
               </div>
             </div>
 
-            <div>
-              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{text.layout}</h2>
-              <div className="grid grid-cols-2 gap-1.5">
-                {LAYOUT_OPTIONS.map((option) => (
-                  <button
-                    key={option.id}
-                    onClick={() => updateLayout(option.id)}
-                    className={`flex flex-col items-center justify-center p-2 rounded-lg border-2 transition-all ${
-                      currentPage.layout === option.id
-                        ? 'border-blue-500 bg-blue-50 text-blue-700 font-bold shadow-sm'
-                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-600'
-                    }`}
-                    aria-pressed={currentPage.layout === option.id}
-                  >
-                    <span className="text-xs text-center">{text.layoutLabels[option.id] ?? option.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+            <label className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50 p-3 text-xs font-semibold text-gray-700">
+              <span>{text.printWarrantyGuide}</span>
+              <input
+                type="checkbox"
+                checked={settings.showPrintWarrantyGuide ?? true}
+                onChange={(event) => setSettings({ ...settings, showPrintWarrantyGuide: event.target.checked })}
+                className="h-5 w-5 accent-blue-600"
+                aria-label={text.printWarrantyGuide}
+              />
+            </label>
 
             <div>
-              <div className="flex items-center justify-between mb-2">
+              <div className="mb-2">
                 <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{text.pageManagement(pagesLength)}</h2>
-                <button
-                  onClick={onOpenOverview}
-                  className="flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-blue-700 transition-colors bg-blue-50 px-2 py-1 rounded"
-                  aria-label={text.overviewOpen}
-                >
-                  <LayoutGrid size={12} /> {text.overviewOpen}
-                </button>
               </div>
 
               <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between bg-gray-50 p-1.5 rounded-lg border border-gray-200">
-                  <button
-                    onClick={() => setCurrentPageIndex(Math.max(0, currentPageIndex - 1))}
-                    disabled={currentPageIndex === 0}
-                    className="p-1.5 disabled:opacity-30 hover:bg-white rounded-md transition-colors shadow-sm bg-white"
-                    aria-label={text.previousPage}
-                  >
-                    <ChevronLeft size={18} />
-                  </button>
-                  <span className="font-medium text-sm">
-                    {currentPageIndex + 1} <span className="text-gray-400 text-xs">/ {pagesLength}</span>
-                  </span>
-                  <button
-                    onClick={() => setCurrentPageIndex(Math.min(pages.length - 1, currentPageIndex + 1))}
-                    disabled={currentPageIndex === pagesLength - 1}
-                    className="p-1.5 disabled:opacity-30 hover:bg-white rounded-md transition-colors shadow-sm bg-white"
-                    aria-label={text.nextPage}
-                  >
-                    <ChevronRight size={18} />
-                  </button>
+                <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-gray-700">{text.bodyPageCount}</span>
+                    <span className="text-[10px] font-bold text-gray-400">{text.totalPageCount(pagesLength)}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {BODY_PAGE_COUNT_OPTIONS.map((count) => (
+                      <button
+                        key={count}
+                        type="button"
+                        onClick={() => setBodyPageCount(count)}
+                        className={`rounded-md border px-2 py-1.5 text-xs font-bold transition-colors ${
+                          bodyPageCount === count
+                            ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm'
+                            : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                        }`}
+                        aria-pressed={bodyPageCount === count}
+                      >
+                        {text.bodyPageCountOption(count)}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="flex gap-2">
                   <button
                     onClick={() => movePage('up')}
-                    disabled={currentPageIndex === 0}
+                    disabled={!canMoveSpreadUp}
                     className="flex-1 flex items-center justify-center gap-1 py-1.5 px-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg transition-colors disabled:opacity-30 text-xs"
                     title={text.movePageForward}
                     aria-label={text.movePageForward}
@@ -397,7 +509,7 @@ export function Sidebar({
                   </button>
                   <button
                     onClick={() => movePage('down')}
-                    disabled={currentPageIndex === pagesLength - 1}
+                    disabled={!canMoveSpreadDown}
                     className="flex-1 flex items-center justify-center gap-1 py-1.5 px-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg transition-colors disabled:opacity-30 text-xs"
                     title={text.movePageBackward}
                     aria-label={text.movePageBackward}
@@ -405,26 +517,179 @@ export function Sidebar({
                     <ArrowDown size={14} /> {text.movePageBackward}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
 
-                <div className="flex gap-2 mt-1">
-                  <button
-                    onClick={addPage}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-gray-900 hover:bg-black text-white rounded-lg transition-colors text-xs font-bold shadow-sm"
-                    aria-label={text.addPage}
-                  >
-                    <Plus size={14} /> {text.addPage}
-                  </button>
-                  <button
-                    onClick={onRequestDeletePage}
-                    disabled={pagesLength <= 1}
-                    className="flex items-center justify-center px-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors disabled:opacity-30 border border-red-100"
-                    title={text.deletePage}
-                    aria-label={text.deletePage}
-                  >
-                    <Trash2 size={16} />
-                  </button>
+        {visibleActivePanel === 'layout' && (
+          <div className="flex flex-col gap-3">
+            <div>
+              <div className="sticky top-0 z-10 -mx-1 mb-3 border-b border-gray-100 bg-white/95 px-1 pb-3 backdrop-blur">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{text.layout}</h2>
+                  <span className="text-[10px] font-bold text-gray-400">
+                    {text.layoutResultCount(filteredImportedLayouts.length)}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-1">
+                  {layoutFilterOptions.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => setLayoutFilter(option.id)}
+                      className={`rounded-full border px-2 py-1 text-[10px] font-bold transition-colors ${
+                        activeLayoutFilter === option.id
+                          ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm'
+                          : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+                      }`}
+                      aria-pressed={activeLayoutFilter === option.id}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
               </div>
+
+              <div className="grid grid-cols-2 gap-1.5">
+                {importedLayoutStatus === 'loading' && (
+                  <div className="col-span-2 flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white p-3 text-xs font-medium text-gray-500">
+                    <Loader2 size={14} className="animate-spin" />
+                    {text.layoutLoading}
+                  </div>
+                )}
+
+                {importedLayoutStatus === 'error' && (
+                  <div className="col-span-2 rounded-lg border border-red-100 bg-red-50 p-3 text-xs text-red-700">
+                    <p className="font-semibold">{text.layoutLoadFailed}</p>
+                    <button
+                      type="button"
+                      onClick={() => void loadImportedLayouts()}
+                      className="mt-2 rounded-md border border-red-200 bg-white px-2 py-1 text-[10px] font-bold text-red-700 hover:bg-red-100"
+                    >
+                      {text.retry}
+                    </button>
+                  </div>
+                )}
+
+                {filteredImportedLayouts.map((layout) => {
+                  const canApplyLayout = layout.isUserSelectable
+                    && !layout.isObjectLayer
+                    && (isCoverPage ? layout.templateType === 'cover' : layout.templateType !== 'cover');
+
+                  return (
+                    <button
+                      key={layout.id}
+                      onClick={() => canApplyLayout && updateLayout(layout.id)}
+                      disabled={!canApplyLayout}
+                      className={`flex min-h-[118px] flex-col items-center justify-start gap-1 p-2 rounded-lg border-2 transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
+                        currentPage.layout === layout.id
+                          ? 'border-blue-500 bg-blue-50 text-blue-700 font-bold shadow-sm'
+                          : canApplyLayout
+                            ? 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-600'
+                            : 'border-gray-100 bg-gray-50 text-gray-500'
+                      }`}
+                      aria-pressed={currentPage.layout === layout.id}
+                    >
+                      <span className="max-w-full truncate text-xs text-center">
+                        {text.layoutLabels[layout.id] ?? layout.label}
+                      </span>
+                      <div className="flex max-w-full flex-wrap justify-center gap-1">
+                        <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                          layout.pageCount === 2 ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {layout.pageCount === 2 ? text.layoutBadges.twoPage : text.layoutBadges.onePage}
+                        </span>
+                        <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
+                          {text.layoutBadges.photoCount(layout.photoFrameCount)}
+                        </span>
+                        {layout.textFrameCount > 0 && (
+                          <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                            {text.layoutBadges.textCount(layout.textFrameCount)}
+                          </span>
+                        )}
+                      </div>
+                      {(layout.isObjectLayer || !layout.isUserSelectable) && (
+                        <div className="flex max-w-full flex-wrap justify-center gap-1">
+                          {layout.isObjectLayer && (
+                            <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">
+                              {text.layoutBadges.objectLayer}
+                            </span>
+                          )}
+                          {!layout.isUserSelectable && (
+                            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-500">
+                              {text.layoutBadges.nonSelectable}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <ImportedLayoutPreview layoutId={layout.id} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {visibleActivePanel === 'stamp' && (
+          <div className="flex flex-col gap-3">
+            <div className="sticky top-0 z-10 -mx-1 border-b border-gray-100 bg-white/95 px-1 pb-3 backdrop-blur">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{text.stampPanelTitle}</h2>
+                <span className="text-[10px] font-bold text-gray-400">
+                  {text.stampResultCount(filteredStampAssets.length)}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {stampStatus === 'loading' && (
+                <div className="col-span-3 flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white p-3 text-xs font-medium text-gray-500">
+                  <Loader2 size={14} className="animate-spin" />
+                  {text.stampLoading}
+                </div>
+              )}
+
+              {stampStatus === 'error' && (
+                <div className="col-span-3 rounded-lg border border-red-100 bg-red-50 p-3 text-xs text-red-700">
+                  <p className="font-semibold">{text.stampLoadFailed}</p>
+                  <button
+                    type="button"
+                    onClick={retryLoadStamps}
+                    className="mt-2 rounded-md border border-red-200 bg-white px-2 py-1 text-[10px] font-bold text-red-700 hover:bg-red-100"
+                  >
+                    {text.retry}
+                  </button>
+                </div>
+              )}
+
+              {stampStatus === 'ready' && filteredStampAssets.length === 0 && (
+                <div className="col-span-3 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-500">
+                  {text.stampEmpty}
+                </div>
+              )}
+
+              {stampStatus === 'ready' && filteredStampAssets.map((stamp) => (
+                <button
+                  key={stamp.id}
+                  type="button"
+                  draggable
+                  onDragStart={(event) => handleStampDragStart(event, stamp)}
+                  className="flex aspect-square cursor-grab items-center justify-center rounded-lg border border-gray-200 bg-white p-2 transition-colors hover:border-blue-300 hover:bg-blue-50 active:cursor-grabbing"
+                  title={stamp.label}
+                  aria-label={stamp.label}
+                >
+                  <img
+                    src={stamp.thumbnailUrl}
+                    alt=""
+                    loading="lazy"
+                    draggable={false}
+                    className="max-h-full max-w-full object-contain"
+                  />
+                </button>
+              ))}
             </div>
           </div>
         )}

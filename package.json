@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "sync:stamps": "node scripts/sync-stamps.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

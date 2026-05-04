@@ -4,6 +4,7 @@ import { toJpeg, toPng } from 'html-to-image';
 import JSZip from 'jszip';
 import type { ExportMessages } from '../i18n';
 import type { PageData, ProjectSettings } from '../types';
+import { getExportGroups, isTwoPageSpread } from '../utils/layout';
 
 type ExportFormat = 'png' | 'jpeg';
 
@@ -42,21 +43,26 @@ export function useExportPages({ hiddenPagesRef, pages, settings, onError, messa
       }
 
       const pageElements = hiddenPagesRef.current.children;
+      const exportGroups = getExportGroups(pages);
       if (pageElements.length === 0) {
         onError(messages.noPages);
         return;
       }
-      if (pageElements.length !== pages.length) {
-        throw new Error(messages.pageCountMismatch(pageElements.length, pages.length));
+      if (pageElements.length !== exportGroups.length) {
+        throw new Error(messages.pageCountMismatch(pageElements.length, exportGroups.length));
       }
 
       const isZipMode = settings.exportMode === 'zip';
       const zip = isZipMode ? new JSZip() : null;
 
-      for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
-        const element = pageElements[pageIndex] as HTMLElement | undefined;
+      for (let groupIndex = 0; groupIndex < exportGroups.length; groupIndex += 1) {
+        const group = exportGroups[groupIndex];
+        const element = pageElements[groupIndex] as HTMLElement | undefined;
+        const label = isTwoPageSpread(group.pages)
+          ? `${group.pageIndexes[0] + 1}-${group.pageIndexes[group.pageIndexes.length - 1] + 1}`
+          : `${group.pageIndexes[0] + 1}`;
         if (!element) {
-          throw new Error(messages.pageElementMissing(pageIndex + 1, format.toUpperCase()));
+          throw new Error(messages.pageElementMissing(groupIndex + 1, format.toUpperCase()));
         }
 
         const options = {
@@ -75,12 +81,12 @@ export function useExportPages({ hiddenPagesRef, pages, settings, onError, messa
             ? await toPng(element, options)
             : await toJpeg(element, options);
         } catch (error) {
-          throw new Error(messages.pageSaveFailed(pageIndex + 1, format.toUpperCase(), getErrorMessage(error)), {
+          throw new Error(messages.pageSaveFailed(groupIndex + 1, format.toUpperCase(), getErrorMessage(error)), {
             cause: error,
           });
         }
 
-        const filename = `photobook-page-${pageIndex + 1}.${format}`;
+        const filename = `photobook-page-${label}.${format}`;
 
         if (isZipMode && zip) {
           // dataUrl is data:image/png;base64,xxxx
