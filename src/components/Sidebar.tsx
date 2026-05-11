@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { DragEvent, ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ChangeEvent, DragEvent, ReactNode } from 'react';
 import { useStore } from 'zustand';
 import {
   ArrowDown,
@@ -13,12 +13,15 @@ import {
   Plus,
   RotateCcw,
   RotateCw,
+  Save,
   Settings,
   Sticker,
   Type,
+  Upload,
   X,
 } from 'lucide-react';
 import { BACKGROUND_COLORS, BODY_PAGE_COUNT_OPTIONS } from '../constants';
+import { ConfirmDialog } from './ConfirmDialog';
 import type { AppText } from '../i18n';
 import type { FrameLayoutDefinition, LayoutType, StampAsset, TextStyle } from '../types';
 import type { TextTarget } from '../utils/textStyle';
@@ -26,6 +29,15 @@ import { FONT_OPTIONS, LANGUAGE_OPTIONS } from '../utils/textStyle';
 import { getFrameLayout, getSpreadStartIndex } from '../utils/layout';
 import { useProjectStore } from '../store/useProjectStore';
 import { serializeStampDragData, STAMP_DRAG_MIME_TYPE } from '../utils/stamps';
+import {
+  createProjectArchive,
+  createProjectArchiveFilename,
+  downloadBlob,
+  PROJECT_ARCHIVE_ACCEPT,
+  type ProjectArchiveSummary,
+  readProjectArchive,
+  readProjectArchiveSummary,
+} from '../utils/projectArchive';
 
 interface Props {
   text: AppText;
@@ -34,6 +46,7 @@ interface Props {
   onActivePanelChange: (panel: SidebarPanel) => void;
   onOpenSettings: () => void;
   onExport: (format: 'png' | 'jpeg') => void;
+  onNotice: (message: string, persistent?: boolean) => void;
   selectedTextStyle: { target: TextTarget; style: Required<TextStyle> } | null;
   onTextStyleChange: (updates: TextStyle) => void;
   isOpen: boolean;
@@ -108,6 +121,7 @@ export function Sidebar({
   onActivePanelChange,
   onOpenSettings,
   onExport,
+  onNotice,
   selectedTextStyle,
   onTextStyleChange,
   isOpen,
@@ -122,11 +136,16 @@ export function Sidebar({
     loadImportedLayouts,
     setSettings,
     setBodyPageCount,
+    replaceProject,
     updateLayout,
     movePage,
   } = useProjectStore();
   
-  const { undo, redo, pastStates, futureStates } = useStore(useProjectStore.temporal);
+  const { undo, redo, clear, pastStates, futureStates } = useStore(useProjectStore.temporal);
+  const projectFileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingProjectFile, setPendingProjectFile] = useState<File | null>(null);
+  const [pendingProjectSummary, setPendingProjectSummary] = useState<ProjectArchiveSummary | null>(null);
+  const [isProjectFileBusy, setIsProjectFileBusy] = useState(false);
   
   const pagesLength = pages.length;
   const currentPage = pages[currentPageIndex] || pages[0];
@@ -193,6 +212,80 @@ export function Sidebar({
   const handleStampDragStart = (event: DragEvent<HTMLButtonElement>, stamp: StampAsset) => {
     event.dataTransfer.effectAllowed = 'copy';
     event.dataTransfer.setData(STAMP_DRAG_MIME_TYPE, serializeStampDragData(stamp));
+  };
+
+  const resetProjectFileInput = () => {
+    if (projectFileInputRef.current) {
+      projectFileInputRef.current.value = '';
+    }
+  };
+
+  const handleSaveProjectFile = async () => {
+    setIsProjectFileBusy(true);
+    try {
+      const archive = await createProjectArchive({ pages, settings, currentPageIndex });
+      downloadBlob(archive, createProjectArchiveFilename());
+      onNotice(text.projectFileSaveSuccess);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      onNotice(text.projectFileSaveFailed(message), true);
+    } finally {
+      setIsProjectFileBusy(false);
+    }
+  };
+
+  const formatProjectArchiveDate = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+
+    return new Intl.DateTimeFormat(settings.uiLanguage === 'ja' ? 'ja-JP' : 'ko-KR', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(date);
+  };
+
+  const handleProjectFileSelect = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsProjectFileBusy(true);
+    try {
+      const summary = await readProjectArchiveSummary(file);
+      setPendingProjectFile(file);
+      setPendingProjectSummary(summary);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      onNotice(text.projectFileLoadFailed(message), true);
+      resetProjectFileInput();
+    } finally {
+      setIsProjectFileBusy(false);
+    }
+  };
+
+  const cancelProjectFileImport = () => {
+    setPendingProjectFile(null);
+    setPendingProjectSummary(null);
+    resetProjectFileInput();
+  };
+
+  const confirmProjectFileImport = async () => {
+    if (!pendingProjectFile) return;
+
+    setIsProjectFileBusy(true);
+    try {
+      const project = await readProjectArchive(pendingProjectFile);
+      await replaceProject(project);
+      clear();
+      onNotice(text.projectFileLoadSuccess);
+      setPendingProjectFile(null);
+      setPendingProjectSummary(null);
+      resetProjectFileInput();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      onNotice(text.projectFileLoadFailed(message), true);
+    } finally {
+      setIsProjectFileBusy(false);
+    }
   };
   
   const updateFontSize = (value: string) => {
@@ -697,6 +790,39 @@ export function Sidebar({
         {visibleActivePanel === 'export' && (
           <div className="flex flex-col gap-4">
             <div>
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{text.projectFile}</h2>
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleSaveProjectFile()}
+                  disabled={isProjectFileBusy}
+                  className="flex items-center justify-center gap-2 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors font-medium shadow-sm text-sm disabled:opacity-50"
+                  aria-label={text.projectFileSave}
+                >
+                  {isProjectFileBusy ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  {text.projectFileSave}
+                </button>
+                <input
+                  ref={projectFileInputRef}
+                  type="file"
+                  accept={PROJECT_ARCHIVE_ACCEPT}
+                  onChange={(event) => void handleProjectFileSelect(event)}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => projectFileInputRef.current?.click()}
+                  disabled={isProjectFileBusy}
+                  className="flex items-center justify-center gap-2 py-2 px-3 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-lg transition-colors font-medium text-sm disabled:opacity-50"
+                  aria-label={text.projectFileLoad}
+                >
+                  {isProjectFileBusy ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                  {text.projectFileLoad}
+                </button>
+              </div>
+            </div>
+
+            <div>
               <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{text.exportMode.label}</h2>
               <div className="flex bg-gray-100 p-1 rounded-lg">
                 <button
@@ -741,6 +867,33 @@ export function Sidebar({
         )}
       </div>
     </aside>
+
+      {pendingProjectFile && (
+        <ConfirmDialog
+          title={text.projectFileLoadDialogTitle}
+          description={(
+            <div className="space-y-3">
+              <p>{text.projectFileLoadDialogDescription}</p>
+              {pendingProjectSummary && (
+                <p className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-gray-700 break-words">
+                  {text.projectFileLoadDialogSummary(
+                    pendingProjectFile.name,
+                    formatProjectArchiveDate(pendingProjectSummary.exportedAt),
+                    pendingProjectSummary.pageCount,
+                    pendingProjectSummary.imageCount,
+                  )}
+                </p>
+              )}
+            </div>
+          )}
+          confirmLabel={isProjectFileBusy ? text.loading : text.projectFileLoadConfirm}
+          cancelLabel={text.cancel}
+          closeLabel={text.projectFileLoadDialogClose}
+          confirmDisabled={isProjectFileBusy}
+          onCancel={cancelProjectFileImport}
+          onConfirm={() => void confirmProjectFileImport()}
+        />
+      )}
     </>
   );
 }

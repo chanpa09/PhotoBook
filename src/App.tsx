@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { ChevronLeft, ChevronRight, LayoutGrid, Loader2, Menu } from 'lucide-react';
 import { A4Page } from './components/A4Page';
+import { PageSpreadView } from './components/PageSpreadView';
 import { NoticeBanner } from './components/NoticeBanner';
 import { OverviewModal } from './components/OverviewModal';
 import { SettingsModal } from './components/SettingsModal';
@@ -9,19 +10,11 @@ import { Sidebar, type SidebarPanel } from './components/Sidebar';
 import { useExportPages } from './hooks/useExportPages';
 import { usePageScale } from './hooks/usePageScale';
 import { useShortcuts } from './hooks/useShortcuts';
+import { useTextSelection } from './hooks/useTextSelection';
 import { TRANSLATIONS } from './i18n';
 import { useProjectStore } from './store/useProjectStore';
-import type { AppText } from './i18n';
-import type { PageData, ProjectSettings, TextStyle } from './types';
 import { getExportGroups, getPageSpreads, getSpreadStartIndex, getVisibleSpread, isTwoPageSpread } from './utils/layout';
 import type { TextTarget } from './utils/textStyle';
-import {
-  DEFAULT_CAPTION_FONT_SIZE,
-  DEFAULT_COVER_DATE_FONT_SIZE,
-  DEFAULT_COVER_TITLE_FONT_SIZE,
-  DEFAULT_LAYOUT_TEXT_FONT_SIZE,
-  getDefaultTextStyle,
-} from './utils/textStyle';
 
 interface Notice {
   id: number;
@@ -33,63 +26,6 @@ const A4_WIDTH = 794;
 const A4_HEIGHT = 1123;
 const A4_VIEWPORT_PADDING = 32;
 
-function PageSpreadView({
-  pages,
-  pageIndexes,
-  currentPageIndex,
-  settings,
-  text,
-  onError,
-  onPageSelect,
-  onTextSelect,
-  onTextBlur,
-  showPageLabel = true,
-  showPrintWarrantyGuide,
-}: {
-  pages: PageData[];
-  pageIndexes: number[];
-  currentPageIndex?: number;
-  settings: ProjectSettings;
-  text: AppText;
-  onError?: (message: string) => void;
-  onPageSelect?: (pageIndex: number) => void;
-  onTextSelect?: (target: TextTarget) => void;
-  onTextBlur?: (nextFocusedElement: EventTarget | null) => void;
-  showPageLabel?: boolean;
-  showPrintWarrantyGuide?: boolean;
-}) {
-  return (
-    <div className="flex h-full w-full bg-gray-200">
-      {pages.map((page, index) => {
-        const pageIndex = pageIndexes[index];
-        const isSelected = currentPageIndex === pageIndex;
-
-        return (
-          <div
-            key={page.id}
-            className={`relative outline outline-offset-[-2px] transition-shadow ${
-              isSelected ? 'z-10 outline-2 outline-blue-500 ring-4 ring-blue-500/25' : 'outline-0'
-            } ${onPageSelect ? 'cursor-pointer' : ''}`}
-            onClick={() => onPageSelect?.(pageIndex)}
-          >
-            <A4Page
-              page={page}
-              pageIndex={pageIndex}
-              settings={settings}
-              text={text}
-              onError={onError}
-              onTextSelect={onTextSelect}
-              onTextBlur={onTextBlur}
-              showPageLabel={showPageLabel}
-              showPrintWarrantyGuide={showPrintWarrantyGuide}
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function App() {
   const {
     isLoaded,
@@ -97,9 +33,6 @@ function App() {
     settings,
     currentPageIndex,
     setCurrentPageIndex,
-    updatePhoto,
-    updateLayoutText,
-    updatePageData,
   } = useProjectStore();
 
   const { undo, redo } = useStore(useProjectStore.temporal);
@@ -107,7 +40,6 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeSidebarPanel, setActiveSidebarPanel] = useState<SidebarPanel>('page');
-  const [selectedTextTarget, setSelectedTextTarget] = useState<TextTarget | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const pageViewportRef = useRef<HTMLDivElement>(null);
   const hiddenPagesRef = useRef<HTMLDivElement>(null);
@@ -139,7 +71,7 @@ function App() {
     setNotice(null);
   };
 
-  const { isExporting, exportAll } = useExportPages({
+  const { isExporting, exportProgress, exportAll } = useExportPages({
     hiddenPagesRef,
     pages,
     settings,
@@ -174,6 +106,12 @@ function App() {
     padding: A4_VIEWPORT_PADDING,
   });
 
+  const {
+    setSelectedTextTarget,
+    selectedTextStyle,
+    updateSelectedTextStyle,
+  } = useTextSelection(pages, visibleSpread.pages);
+
   useEffect(() => {
     return () => {
       if (noticeTimeoutRef.current !== null) {
@@ -181,112 +119,6 @@ function App() {
       }
     };
   }, []);
-
-  const selectedTextStyle = (() => {
-    if (!selectedTextTarget) return null;
-
-    const targetPage = pages.find((page) => page.id === selectedTextTarget.pageId);
-    if (!targetPage || !visibleSpread.pages.some((page) => page.id === targetPage.id)) return null;
-
-    if (selectedTextTarget.type === 'coverTitle') {
-      return {
-        target: selectedTextTarget,
-        style: {
-          ...getDefaultTextStyle(DEFAULT_COVER_TITLE_FONT_SIZE),
-          ...targetPage.coverTitleStyle,
-        },
-      };
-    }
-
-    if (selectedTextTarget.type === 'coverDate') {
-      return {
-        target: selectedTextTarget,
-        style: {
-          ...getDefaultTextStyle(DEFAULT_COVER_DATE_FONT_SIZE),
-          ...targetPage.coverDateStyle,
-        },
-      };
-    }
-
-    if (selectedTextTarget.type === 'layoutText') {
-      const layoutText = targetPage.layoutTexts?.[selectedTextTarget.textIndex];
-
-      return {
-        target: selectedTextTarget,
-        style: {
-          ...getDefaultTextStyle(DEFAULT_LAYOUT_TEXT_FONT_SIZE),
-          ...layoutText?.style,
-        },
-      };
-    }
-
-    if (selectedTextTarget.type !== 'caption') return null;
-
-    const photo = targetPage.photos[selectedTextTarget.photoIndex];
-    if (!photo) return null;
-
-    return {
-      target: selectedTextTarget,
-      style: {
-        ...getDefaultTextStyle(DEFAULT_CAPTION_FONT_SIZE),
-        ...photo.captionStyle,
-      },
-    };
-  })();
-
-  const updateSelectedTextStyle = (updates: TextStyle) => {
-    if (!selectedTextTarget) return;
-
-    const targetPage = pages.find((page) => page.id === selectedTextTarget.pageId);
-    if (!targetPage || !visibleSpread.pages.some((page) => page.id === targetPage.id)) return;
-
-    if (selectedTextTarget.type === 'coverTitle') {
-      updatePageData(targetPage.id, {
-        coverTitleStyle: {
-          ...getDefaultTextStyle(DEFAULT_COVER_TITLE_FONT_SIZE),
-          ...targetPage.coverTitleStyle,
-          ...updates,
-        },
-      });
-      return;
-    }
-
-    if (selectedTextTarget.type === 'coverDate') {
-      updatePageData(targetPage.id, {
-        coverDateStyle: {
-          ...getDefaultTextStyle(DEFAULT_COVER_DATE_FONT_SIZE),
-          ...targetPage.coverDateStyle,
-          ...updates,
-        },
-      });
-      return;
-    }
-
-    if (selectedTextTarget.type === 'layoutText') {
-      const layoutText = targetPage.layoutTexts?.[selectedTextTarget.textIndex];
-      updateLayoutText(targetPage.id, selectedTextTarget.textIndex, {
-        style: {
-          ...getDefaultTextStyle(DEFAULT_LAYOUT_TEXT_FONT_SIZE),
-          ...layoutText?.style,
-          ...updates,
-        },
-      });
-      return;
-    }
-
-    if (selectedTextTarget.type !== 'caption') return;
-
-    const photo = targetPage.photos[selectedTextTarget.photoIndex];
-    if (!photo) return;
-
-    updatePhoto(targetPage.id, selectedTextTarget.photoIndex, {
-      captionStyle: {
-        ...getDefaultTextStyle(DEFAULT_CAPTION_FONT_SIZE),
-        ...photo.captionStyle,
-        ...updates,
-      },
-    });
-  };
 
   const selectTextTarget = (target: TextTarget) => {
     setSelectedTextTarget(target);
@@ -322,6 +154,7 @@ function App() {
         onActivePanelChange={setActiveSidebarPanel}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onExport={exportAll}
+        onNotice={showNotice}
         selectedTextStyle={selectedTextStyle}
         onTextStyleChange={updateSelectedTextStyle}
         isOpen={isSidebarOpen}
@@ -450,6 +283,15 @@ function App() {
           <Loader2 className="w-16 h-16 animate-spin mb-4 text-blue-400" />
           <h2 className="text-2xl font-bold mb-2">{text.exportOverlayTitle}</h2>
           <p className="text-gray-300">{text.exportOverlayDescription}</p>
+          {exportProgress && (
+            <p className="mt-3 text-sm font-semibold text-blue-100">
+              {text.exportOverlayProgress(
+                exportProgress.current,
+                exportProgress.total,
+                exportProgress.label,
+              )}
+            </p>
+          )}
         </div>
       )}
 

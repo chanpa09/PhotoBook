@@ -9,6 +9,11 @@ const imageStore = localforage.createInstance({
 const objectUrlCache = new Map<string, string>();
 
 export async function saveImage(id: string, blob: Blob): Promise<void> {
+  const cached = objectUrlCache.get(id);
+  if (cached) {
+    URL.revokeObjectURL(cached);
+    objectUrlCache.delete(id);
+  }
   await imageStore.setItem(id, blob);
 }
 
@@ -24,6 +29,10 @@ export async function loadImageUrl(id: string): Promise<string | null> {
   return url;
 }
 
+export async function loadImageBlob(id: string): Promise<Blob | null> {
+  return imageStore.getItem<Blob>(id);
+}
+
 export async function deleteImage(id: string): Promise<void> {
   const cached = objectUrlCache.get(id);
   if (cached) {
@@ -31,6 +40,18 @@ export async function deleteImage(id: string): Promise<void> {
     objectUrlCache.delete(id);
   }
   await imageStore.removeItem(id);
+}
+
+export async function deleteUnusedImages(activeImageIds: Set<string>): Promise<void> {
+  const imageIdsToDelete: string[] = [];
+
+  await imageStore.iterate((_value, key) => {
+    if (!activeImageIds.has(key)) {
+      imageIdsToDelete.push(key);
+    }
+  });
+
+  await Promise.all(imageIdsToDelete.map((id) => deleteImage(id)));
 }
 
 export function createObjectUrlFromBlob(blob: Blob, id: string): string {

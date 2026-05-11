@@ -20,15 +20,17 @@ import type {
   StampInstance,
 } from '../types';
 import {
+  applyLayoutToPage,
   fetchImportedFrameLayouts,
-  getFrameLayout,
+  getSpreadPartnerIndex,
   getSpreadStartIndex,
   isImportedLayout,
   resolveLayoutId,
   setImportedFrameLayouts,
 } from '../utils/layout';
-import { restoreImageUrls } from '../utils/imageStore';
+import { deleteUnusedImages, restoreImageUrls, saveImage } from '../utils/imageStore';
 import { A4_PAGE_HEIGHT, A4_PAGE_WIDTH, DEFAULT_STAMP_SIZE } from '../utils/stamps';
+import type { ImportedProjectArchive } from '../utils/projectArchive';
 
 type ImportedLayoutStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -64,47 +66,10 @@ const ensureEvenBodyPages = (pages: PageData[]): PageData[] => {
   return nextPages;
 };
 
-const resetSpreadPage = (page: PageData): PageData => ({
-  ...page,
-  layout: '1',
-  spreadSide: undefined,
-});
-
-const getSpreadPartnerIndex = (pages: PageData[], index: number) => {
-  const page = pages[index];
-  if (!page?.spreadSide) return null;
-
-  const frameLayout = getFrameLayout(page.layout);
-  if (!frameLayout && !isImportedLayout(page.layout)) return null;
-  if (frameLayout && frameLayout.pageCount !== 2) return null;
-
-  const partnerIndex = page.spreadSide === 'left' ? index + 1 : index - 1;
-  const partner = pages[partnerIndex];
-  if (!partner || partner.layout !== page.layout) return null;
-  if (page.spreadSide === 'left' && partner.spreadSide !== 'right') return null;
-  if (page.spreadSide === 'right' && partner.spreadSide !== 'left') return null;
-
-  return partnerIndex;
-};
-
-const detachSpreadPair = (pages: PageData[], index: number) => {
-  const partnerIndex = getSpreadPartnerIndex(pages, index);
-  if (partnerIndex !== null) {
-    pages[partnerIndex] = resetSpreadPage(pages[partnerIndex]);
-  }
-
-  if (pages[index]?.spreadSide) {
-    pages[index] = {
-      ...pages[index],
-      spreadSide: undefined,
-    };
-  }
-};
-
 const normalizeSpreadPairs = (pages: PageData[]): PageData[] =>
   pages.map((page, index) => {
     if (!page.spreadSide) return page;
-    return getSpreadPartnerIndex(pages, index) === null ? resetSpreadPage(page) : page;
+    return getSpreadPartnerIndex(pages, index) === null ? { ...page, layout: '1', spreadSide: undefined } : page;
   });
 
 const normalizePages = (pages?: PageData[] | null): PageData[] => {
@@ -121,35 +86,15 @@ const normalizePages = (pages?: PageData[] | null): PageData[] => {
 const pagesContainImportedLayout = (pages: PageData[]) =>
   pages.some((page) => isImportedLayout(resolveLayoutId(page.layout)));
 
+const collectPageImageIds = (pages: PageData[]) =>
+  new Set(
+    pages.flatMap((page) =>
+      page.photos.flatMap((photo) => photo?.imageId ? [photo.imageId] : []),
+    ),
+  );
+
 const isAllowedBodyPageCount = (count: number) =>
   BODY_PAGE_COUNT_OPTIONS.some((option) => option === count);
-
-const getCoverLayoutTexts = (page: PageData, frameLayout: FrameLayoutDefinition): LayoutText[] =>
-  Array.from({ length: frameLayout.textFrameCount }, (_, index) => {
-    const currentText = page.layoutTexts?.[index];
-    const frame = frameLayout.textFrames?.[index];
-    const fallbackValue = frame?.textType === 'title'
-      ? page.coverTitle ?? ''
-      : frame?.textType === 'subtitle'
-        ? page.coverDate ?? ''
-        : '';
-
-    return {
-      ...currentText,
-      value: currentText?.value ?? fallbackValue,
-    };
-  });
-
-const getCoverTextValues = (page: PageData) => {
-  const frameLayout = getFrameLayout(page.layout);
-  const titleIndex = frameLayout?.textFrames?.findIndex((frame) => frame.textType === 'title') ?? -1;
-  const subtitleIndex = frameLayout?.textFrames?.findIndex((frame) => frame.textType === 'subtitle') ?? -1;
-
-  return {
-    coverTitle: titleIndex >= 0 ? page.layoutTexts?.[titleIndex]?.value ?? page.coverTitle : page.coverTitle,
-    coverDate: subtitleIndex >= 0 ? page.layoutTexts?.[subtitleIndex]?.value ?? page.coverDate : page.coverDate,
-  };
-};
 
 interface ProjectState {
   isLoaded: boolean;
@@ -177,9 +122,13 @@ interface ProjectState {
   addStampAt: (pageId: string, stamp: StampAsset, position: { x: number; y: number }) => void;
   updateStamp: (pageId: string, instanceId: string, updates: Partial<StampInstance>) => void;
   removeStamp: (pageId: string, instanceId: string) => void;
+  bringStampToFront: (pageId: string, instanceId: string) => void;
   bringStampForward: (pageId: string, instanceId: string) => void;
+  sendStampBackward: (pageId: string, instanceId: string) => void;
+  sendStampToBack: (pageId: string, instanceId: string) => void;
   reorderPages: (activeId: string, overId: string) => void;
   loadImportedLayouts: () => Promise<void>;
+  replaceProject: (project: ImportedProjectArchive) => Promise<void>;
   
   // Storage Migration
   loadLegacyData: () => Promise<void>;
@@ -328,99 +277,12 @@ export const useProjectStore = create<ProjectState>()(
           const normalizedPages = normalizePages(pages);
           const safePageIndex = clampPageIndex(currentPageIndex, normalizedPages.length);
 
-          const resolvedLayout = resolveLayoutId(layout);
-          const frameLayout = getFrameLayout(resolvedLayout);
-          const nextPages = [...normalizedPages];
-
-          if (safePageIndex === 0) {
-            if (resolvedLayout === 'cover') {
-              const coverTextValues = getCoverTextValues(nextPages[0]);
-              nextPages[0] = {
-                ...nextPages[0],
-                ...coverTextValues,
-                layout: resolvedLayout,
-                spreadSide: undefined,
-                photos: [nextPages[0].photos[0] ?? null],
-                layoutTexts: undefined,
-              };
-              set({ pages: nextPages, currentPageIndex: 0 });
-            }
-
-            if (frameLayout?.templateType !== 'cover' || frameLayout.pageCount !== 1) return;
-
-            const sourcePhotos = nextPages[0].photos.filter((photo) => photo !== null);
-            nextPages[0] = {
-              ...nextPages[0],
-              layout: resolvedLayout,
-              spreadSide: undefined,
-              photos: Array.from(
-                { length: frameLayout.photoFrameCount },
-                (_, index) => sourcePhotos[index] ?? null,
-              ),
-              layoutTexts: getCoverLayoutTexts(nextPages[0], frameLayout),
-            };
-            set({ pages: nextPages, currentPageIndex: 0 });
-            return;
-          }
-
-          if (frameLayout?.templateType === 'cover') return;
-
-          if (frameLayout?.pageCount === 2) {
-            const spreadStartIndex = getSpreadStartIndex(safePageIndex);
-            detachSpreadPair(nextPages, spreadStartIndex);
-            if (spreadStartIndex + 1 < nextPages.length) {
-              detachSpreadPair(nextPages, spreadStartIndex + 1);
-            }
-            const nextPage = nextPages[spreadStartIndex + 1] ?? {
-              id: crypto.randomUUID(),
-              layout: resolvedLayout,
-              photos: [],
-            };
-            const sourcePhotos = [
-              ...nextPages[spreadStartIndex].photos,
-              ...nextPage.photos,
-            ].filter((photo) => photo !== null);
-            const spreadPhotos = Array.from(
-              { length: frameLayout.photoFrameCount },
-              (_, index) => sourcePhotos[index] ?? null,
-            );
-            const sourceLayoutTexts = [...(nextPages[spreadStartIndex].layoutTexts ?? [])];
-            (nextPage.layoutTexts ?? []).forEach((layoutText, index) => {
-              if (!sourceLayoutTexts[index]) {
-                sourceLayoutTexts[index] = layoutText;
-              }
-            });
-            const spreadLayoutTexts = Array.from(
-              { length: frameLayout.textFrameCount },
-              (_, index) => sourceLayoutTexts[index] ?? { value: '' },
-            );
-
-            nextPages[spreadStartIndex] = {
-              ...nextPages[spreadStartIndex],
-              layout: resolvedLayout,
-              spreadSide: 'left',
-              photos: spreadPhotos,
-              layoutTexts: spreadLayoutTexts,
-            };
-            nextPages[spreadStartIndex + 1] = {
-              ...nextPage,
-              layout: resolvedLayout,
-              spreadSide: 'right',
-              photos: spreadPhotos,
-              layoutTexts: spreadLayoutTexts,
-            };
-
-            set({ pages: nextPages, currentPageIndex: safePageIndex });
-            return;
-          }
-
-          detachSpreadPair(nextPages, safePageIndex);
-          nextPages[safePageIndex] = {
-            ...nextPages[safePageIndex],
-            layout: resolvedLayout,
-            spreadSide: undefined,
-          };
-          set({ pages: nextPages, currentPageIndex: safePageIndex });
+          const nextPages = applyLayoutToPage(normalizedPages, safePageIndex, layout);
+          
+          set({
+            pages: nextPages,
+            currentPageIndex: safePageIndex === 0 ? 0 : safePageIndex,
+          });
         },
 
         updatePhotoTransform: (pageId, index, transform) => {
@@ -513,7 +375,7 @@ export const useProjectStore = create<ProjectState>()(
           set({ pages: nextPages });
         },
 
-        bringStampForward: (pageId, instanceId) => {
+        bringStampToFront: (pageId, instanceId) => {
           const nextPages = get().pages.map((page) => {
             if (page.id !== pageId) return page;
 
@@ -528,6 +390,80 @@ export const useProjectStore = create<ProjectState>()(
               ...page,
               stamps: stamps.map((stamp) => (
                 stamp.instanceId === instanceId ? { ...stamp, zIndex: nextZIndex } : stamp
+              )),
+            };
+          });
+
+          set({ pages: nextPages });
+        },
+
+        bringStampForward: (pageId, instanceId) => {
+          const nextPages = get().pages.map((page) => {
+            if (page.id !== pageId) return page;
+
+            const stamps = page.stamps ?? [];
+            const currentStamp = stamps.find((stamp) => stamp.instanceId === instanceId);
+            if (!currentStamp) return page;
+
+            const higherStamps = stamps.filter((stamp) => stamp.zIndex > currentStamp.zIndex);
+            if (higherStamps.length === 0) return page;
+
+            const nextStamp = higherStamps.reduce((prev, curr) => (prev.zIndex < curr.zIndex ? prev : curr));
+
+            return {
+              ...page,
+              stamps: stamps.map((stamp) => {
+                if (stamp.instanceId === currentStamp.instanceId) return { ...stamp, zIndex: nextStamp.zIndex };
+                if (stamp.instanceId === nextStamp.instanceId) return { ...stamp, zIndex: currentStamp.zIndex };
+                return stamp;
+              }),
+            };
+          });
+
+          set({ pages: nextPages });
+        },
+
+        sendStampBackward: (pageId, instanceId) => {
+          const nextPages = get().pages.map((page) => {
+            if (page.id !== pageId) return page;
+
+            const stamps = page.stamps ?? [];
+            const currentStamp = stamps.find((stamp) => stamp.instanceId === instanceId);
+            if (!currentStamp) return page;
+
+            const lowerStamps = stamps.filter((stamp) => stamp.zIndex < currentStamp.zIndex);
+            if (lowerStamps.length === 0) return page;
+
+            const prevStamp = lowerStamps.reduce((prev, curr) => (prev.zIndex > curr.zIndex ? prev : curr));
+
+            return {
+              ...page,
+              stamps: stamps.map((stamp) => {
+                if (stamp.instanceId === currentStamp.instanceId) return { ...stamp, zIndex: prevStamp.zIndex };
+                if (stamp.instanceId === prevStamp.instanceId) return { ...stamp, zIndex: currentStamp.zIndex };
+                return stamp;
+              }),
+            };
+          });
+
+          set({ pages: nextPages });
+        },
+
+        sendStampToBack: (pageId, instanceId) => {
+          const nextPages = get().pages.map((page) => {
+            if (page.id !== pageId) return page;
+
+            const stamps = page.stamps ?? [];
+            const currentStamp = stamps.find((stamp) => stamp.instanceId === instanceId);
+            if (!currentStamp) return page;
+
+            const prevZIndex = Math.min(0, ...stamps.map((stamp) => stamp.zIndex)) - 1;
+            if (currentStamp.zIndex === prevZIndex + 1) return page;
+
+            return {
+              ...page,
+              stamps: stamps.map((stamp) => (
+                stamp.instanceId === instanceId ? { ...stamp, zIndex: prevZIndex } : stamp
               )),
             };
           });
@@ -593,6 +529,29 @@ export const useProjectStore = create<ProjectState>()(
               importedLayoutStatus: 'error',
               importedLayoutError: error instanceof Error ? error.message : 'Failed to load imported layouts',
             });
+          }
+        },
+
+        replaceProject: async (project) => {
+          await Promise.all(project.images.map((image) => saveImage(image.id, image.blob)));
+
+          const nextPages = normalizePages(project.pages);
+          const restoredPages = await restoreImageUrls(nextPages);
+          const nextSettings = {
+            ...DEFAULT_SETTINGS,
+            ...project.settings,
+          };
+
+          set({
+            pages: restoredPages,
+            settings: nextSettings,
+            currentPageIndex: clampPageIndex(project.currentPageIndex, restoredPages.length),
+          });
+
+          await deleteUnusedImages(collectPageImageIds(restoredPages));
+
+          if (pagesContainImportedLayout(restoredPages)) {
+            await get().loadImportedLayouts();
           }
         },
 

@@ -71,6 +71,18 @@ export interface AppText {
   addPage: string;
   deletePage: string;
   download: string;
+  projectFile: string;
+  projectFileSave: string;
+  projectFileLoad: string;
+  projectFileSaveSuccess: string;
+  projectFileLoadSuccess: string;
+  projectFileSaveFailed: (message: string) => string;
+  projectFileLoadFailed: (message: string) => string;
+  projectFileLoadDialogTitle: string;
+  projectFileLoadDialogDescription: string;
+  projectFileLoadDialogSummary: (filename: string, exportedAt: string, pageCount: number, imageCount: number) => string;
+  projectFileLoadConfirm: string;
+  projectFileLoadDialogClose: string;
   exportPng: string;
   exportJpeg: string;
   exportZip: string;
@@ -101,6 +113,7 @@ export interface AppText {
   };
   exportOverlayTitle: string;
   exportOverlayDescription: string;
+  exportOverlayProgress: (current: number, total: number, label: string) => string;
   deleteDialogTitle: string;
   deleteDialogDescription: string;
   confirmDelete: string;
@@ -227,6 +240,19 @@ export const TRANSLATIONS: Record<UILanguage, AppText> = {
     addPage: '새 페이지',
     deletePage: '현재 페이지 삭제',
     download: '다운로드 (Export)',
+    projectFile: '작업 파일',
+    projectFileSave: '작업 파일로 저장',
+    projectFileLoad: '작업 파일 불러오기',
+    projectFileSaveSuccess: '작업 파일을 저장했습니다.',
+    projectFileLoadSuccess: '작업 파일을 불러왔습니다.',
+    projectFileSaveFailed: (message) => `작업 파일 저장에 실패했습니다: ${message}`,
+    projectFileLoadFailed: (message) => `작업 파일 불러오기에 실패했습니다: ${message}`,
+    projectFileLoadDialogTitle: '작업 파일을 불러올까요?',
+    projectFileLoadDialogDescription: '현재 작업은 선택한 파일 내용으로 교체됩니다. 필요한 경우 먼저 작업 파일로 저장해 주세요.',
+    projectFileLoadDialogSummary: (filename, exportedAt, pageCount, imageCount) =>
+      `${filename} · ${exportedAt} · ${pageCount}장 · 이미지 ${imageCount}개`,
+    projectFileLoadConfirm: '불러오기',
+    projectFileLoadDialogClose: '작업 파일 불러오기 닫기',
     exportPng: 'PNG로 저장',
     exportJpeg: 'JPEG로 저장',
     exportZip: 'ZIP으로 묶어서 저장',
@@ -257,6 +283,9 @@ export const TRANSLATIONS: Record<UILanguage, AppText> = {
     },
     exportOverlayTitle: '포토북을 추출하고 있습니다...',
     exportOverlayDescription: '페이지가 많을 경우 시간이 조금 걸릴 수 있습니다.',
+    exportOverlayProgress: (current, total, label) => (
+      current > 0 ? `${current} / ${total} 저장 중 · Page ${label}` : `0 / ${total} 준비 중`
+    ),
     deleteDialogTitle: '현재 페이지를 삭제할까요?',
     deleteDialogDescription: '삭제한 페이지는 실행 취소로 되돌릴 수 있습니다.',
     confirmDelete: '삭제',
@@ -388,6 +417,19 @@ export const TRANSLATIONS: Record<UILanguage, AppText> = {
     addPage: '新規ページ',
     deletePage: '現在のページを削除',
     download: 'ダウンロード (Export)',
+    projectFile: '作業ファイル',
+    projectFileSave: '作業ファイルとして保存',
+    projectFileLoad: '作業ファイルを読み込む',
+    projectFileSaveSuccess: '作業ファイルを保存しました。',
+    projectFileLoadSuccess: '作業ファイルを読み込みました。',
+    projectFileSaveFailed: (message) => `作業ファイルの保存に失敗しました: ${message}`,
+    projectFileLoadFailed: (message) => `作業ファイルの読み込みに失敗しました: ${message}`,
+    projectFileLoadDialogTitle: '作業ファイルを読み込みますか？',
+    projectFileLoadDialogDescription: '現在の作業は選択したファイルの内容に置き換えられます。必要な場合は先に作業ファイルとして保存してください。',
+    projectFileLoadDialogSummary: (filename, exportedAt, pageCount, imageCount) =>
+      `${filename} · ${exportedAt} · ${pageCount}ページ · 画像${imageCount}件`,
+    projectFileLoadConfirm: '読み込む',
+    projectFileLoadDialogClose: '作業ファイル読み込みを閉じる',
     exportPng: 'PNGで保存',
     exportJpeg: 'JPEGで保存',
     exportZip: 'ZIPでまとめて保存',
@@ -418,6 +460,9 @@ export const TRANSLATIONS: Record<UILanguage, AppText> = {
     },
     exportOverlayTitle: 'フォトブックを書き出しています...',
     exportOverlayDescription: 'ページ数が多い場合は少し時間がかかります。',
+    exportOverlayProgress: (current, total, label) => (
+      current > 0 ? `${current} / ${total} 保存中 · Page ${label}` : `0 / ${total} 準備中`
+    ),
     deleteDialogTitle: '現在のページを削除しますか？',
     deleteDialogDescription: '削除したページは「元に戻す」で復元できます。',
     confirmDelete: '削除',

@@ -211,6 +211,165 @@ const clipTextFramesToSpreadSide = (
   });
 };
 
+export const resetSpreadPage = (page: PageData): PageData => ({
+  ...page,
+  layout: '1',
+  spreadSide: undefined,
+});
+
+export const getSpreadPartnerIndex = (pages: PageData[], index: number) => {
+  const page = pages[index];
+  if (!page?.spreadSide) return null;
+
+  const frameLayout = getFrameLayout(page.layout);
+  if (!frameLayout && !isImportedLayout(page.layout)) return null;
+  if (frameLayout && frameLayout.pageCount !== 2) return null;
+
+  const partnerIndex = page.spreadSide === 'left' ? index + 1 : index - 1;
+  const partner = pages[partnerIndex];
+  if (!partner || partner.layout !== page.layout) return null;
+  if (page.spreadSide === 'left' && partner.spreadSide !== 'right') return null;
+  if (page.spreadSide === 'right' && partner.spreadSide !== 'left') return null;
+
+  return partnerIndex;
+};
+
+export const detachSpreadPair = (pages: PageData[], index: number) => {
+  const partnerIndex = getSpreadPartnerIndex(pages, index);
+  if (partnerIndex !== null) {
+    pages[partnerIndex] = resetSpreadPage(pages[partnerIndex]);
+  }
+
+  if (pages[index]?.spreadSide) {
+    pages[index] = {
+      ...pages[index],
+      spreadSide: undefined,
+    };
+  }
+};
+
+export const getCoverLayoutTexts = (page: PageData, frameLayout: FrameLayoutDefinition): NonNullable<PageData['layoutTexts']> =>
+  Array.from({ length: frameLayout.textFrameCount }, (_, index) => {
+    const currentText = page.layoutTexts?.[index];
+    const frame = frameLayout.textFrames?.[index];
+    const fallbackValue = frame?.textType === 'title'
+      ? page.coverTitle ?? ''
+      : frame?.textType === 'subtitle'
+        ? page.coverDate ?? ''
+        : '';
+
+    return {
+      ...currentText,
+      value: currentText?.value ?? fallbackValue,
+    };
+  });
+
+export const getCoverTextValues = (page: PageData) => {
+  const frameLayout = getFrameLayout(page.layout);
+  const titleIndex = frameLayout?.textFrames?.findIndex((frame) => frame.textType === 'title') ?? -1;
+  const subtitleIndex = frameLayout?.textFrames?.findIndex((frame) => frame.textType === 'subtitle') ?? -1;
+
+  return {
+    coverTitle: titleIndex >= 0 ? page.layoutTexts?.[titleIndex]?.value ?? page.coverTitle : page.coverTitle,
+    coverDate: subtitleIndex >= 0 ? page.layoutTexts?.[subtitleIndex]?.value ?? page.coverDate : page.coverDate,
+  };
+};
+
+export const applyLayoutToPage = (pages: PageData[], pageIndex: number, layout: LayoutType): PageData[] => {
+  const resolvedLayout = resolveLayoutId(layout);
+  const frameLayout = getFrameLayout(resolvedLayout);
+  const nextPages = [...pages];
+
+  if (pageIndex === 0) {
+    if (resolvedLayout === 'cover') {
+      const coverTextValues = getCoverTextValues(nextPages[0]);
+      nextPages[0] = {
+        ...nextPages[0],
+        ...coverTextValues,
+        layout: resolvedLayout,
+        spreadSide: undefined,
+        photos: [nextPages[0].photos[0] ?? null],
+        layoutTexts: undefined,
+      };
+      return nextPages;
+    }
+
+    if (frameLayout?.templateType !== 'cover' || frameLayout.pageCount !== 1) return nextPages;
+
+    const sourcePhotos = nextPages[0].photos.filter((photo) => photo !== null);
+    nextPages[0] = {
+      ...nextPages[0],
+      layout: resolvedLayout,
+      spreadSide: undefined,
+      photos: Array.from(
+        { length: frameLayout.photoFrameCount },
+        (_, index) => sourcePhotos[index] ?? null,
+      ),
+      layoutTexts: getCoverLayoutTexts(nextPages[0], frameLayout),
+    };
+    return nextPages;
+  }
+
+  if (frameLayout?.templateType === 'cover') return nextPages;
+
+  if (frameLayout?.pageCount === 2) {
+    const spreadStartIndex = getSpreadStartIndex(pageIndex);
+    detachSpreadPair(nextPages, spreadStartIndex);
+    if (spreadStartIndex + 1 < nextPages.length) {
+      detachSpreadPair(nextPages, spreadStartIndex + 1);
+    }
+    const nextPage = nextPages[spreadStartIndex + 1] ?? {
+      id: crypto.randomUUID(),
+      layout: resolvedLayout,
+      photos: [],
+    };
+    const sourcePhotos = [
+      ...nextPages[spreadStartIndex].photos,
+      ...nextPage.photos,
+    ].filter((photo) => photo !== null);
+    const spreadPhotos = Array.from(
+      { length: frameLayout.photoFrameCount },
+      (_, index) => sourcePhotos[index] ?? null,
+    );
+    const sourceLayoutTexts = [...(nextPages[spreadStartIndex].layoutTexts ?? [])];
+    (nextPage.layoutTexts ?? []).forEach((layoutText, index) => {
+      if (!sourceLayoutTexts[index]) {
+        sourceLayoutTexts[index] = layoutText;
+      }
+    });
+    const spreadLayoutTexts = Array.from(
+      { length: frameLayout.textFrameCount },
+      (_, index) => sourceLayoutTexts[index] ?? { value: '' },
+    );
+
+    nextPages[spreadStartIndex] = {
+      ...nextPages[spreadStartIndex],
+      layout: resolvedLayout,
+      spreadSide: 'left',
+      photos: spreadPhotos,
+      layoutTexts: spreadLayoutTexts,
+    };
+    nextPages[spreadStartIndex + 1] = {
+      ...nextPage,
+      layout: resolvedLayout,
+      spreadSide: 'right',
+      photos: spreadPhotos,
+      layoutTexts: spreadLayoutTexts,
+    };
+
+    return nextPages;
+  }
+
+  detachSpreadPair(nextPages, pageIndex);
+  nextPages[pageIndex] = {
+    ...nextPages[pageIndex],
+    layout: resolvedLayout,
+    spreadSide: undefined,
+  };
+  
+  return nextPages;
+};
+
 export function getDisplayFrameLayout(
   frameLayout: FrameLayoutDefinition,
   spreadSide?: PageData['spreadSide'],

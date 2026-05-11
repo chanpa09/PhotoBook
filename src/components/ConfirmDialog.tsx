@@ -1,9 +1,12 @@
+import type { ReactNode } from 'react';
+
 interface Props {
   title: string;
-  description: string;
+  description: ReactNode;
   confirmLabel: string;
   cancelLabel: string;
   closeLabel: string;
+  confirmDisabled?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -14,6 +17,7 @@ export function ConfirmDialog({
   confirmLabel,
   cancelLabel,
   closeLabel,
+  confirmDisabled = false,
   onCancel,
   onConfirm,
 }: Props) {
@@ -34,7 +38,7 @@ export function ConfirmDialog({
         <h2 id="confirm-dialog-title" className="text-lg font-bold text-gray-900 mb-2">
           {title}
         </h2>
-        <p className="text-sm text-gray-600 mb-5">{description}</p>
+        <div className="text-sm text-gray-600 mb-5">{description}</div>
         <div className="flex justify-end gap-2">
           <button
             type="button"
@@ -46,7 +50,8 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onConfirm}
-            className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 text-sm font-bold"
+            disabled={confirmDisabled}
+            className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 text-sm font-bold disabled:opacity-50"
           >
             {confirmLabel}
           </button>

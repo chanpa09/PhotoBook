@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import type { ChangeEvent, CSSProperties, DragEvent, PointerEvent as ReactPointerEvent, RefObject } from 'react';
-import { ImagePlus, Move, RotateCcw, RotateCw, Trash2 } from 'lucide-react';
+import { ImagePlus, Move, RotateCcw, RotateCw, Trash2, ArrowUpToLine, ArrowUp, ArrowDown, ArrowDownToLine } from 'lucide-react';
 import { EmptyPhotoSlot, PageLabel, PhotoActions } from './A4PageParts';
 import type { AppText } from '../i18n';
 import { useProjectStore } from '../store/useProjectStore';
@@ -70,7 +70,7 @@ function PrintWarrantyGuideOverlay() {
 }
 
 function StampLayer({ page, interactive }: { page: PageData; interactive: boolean }) {
-  const { updateStamp, removeStamp, bringStampForward } = useProjectStore();
+  const { updateStamp, removeStamp, bringStampToFront, bringStampForward, sendStampBackward, sendStampToBack } = useProjectStore();
   const [selectedStampId, setSelectedStampId] = useState<string | null>(null);
   const activeStampMode = useRef<'move' | 'resize' | null>(null);
   const activeStampId = useRef<string | null>(null);
@@ -176,7 +176,7 @@ function StampLayer({ page, interactive }: { page: PageData; interactive: boolea
     lastStampPointer.current = { x: event.clientX, y: event.clientY };
     draftStampPosition.current = { x: stamp.x, y: stamp.y };
     setSelectedStampId(stamp.instanceId);
-    bringStampForward(page.id, stamp.instanceId);
+    bringStampToFront(page.id, stamp.instanceId);
     event.preventDefault();
     event.stopPropagation();
   };
@@ -198,7 +198,7 @@ function StampLayer({ page, interactive }: { page: PageData; interactive: boolea
     startStampWidth.current = stampSize * stamp.scale;
     draftStampScale.current = stamp.scale;
     setSelectedStampId(stamp.instanceId);
-    bringStampForward(page.id, stamp.instanceId);
+    bringStampToFront(page.id, stamp.instanceId);
     event.preventDefault();
     event.stopPropagation();
   };
@@ -238,6 +238,43 @@ function StampLayer({ page, interactive }: { page: PageData; interactive: boolea
                 >
                   <button
                     type="button"
+                    onClick={() => sendStampToBack(page.id, stamp.instanceId)}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"
+                    aria-label="Send to back"
+                    title="Send to back"
+                  >
+                    <ArrowDownToLine size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => sendStampBackward(page.id, stamp.instanceId)}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"
+                    aria-label="Send backward"
+                    title="Send backward"
+                  >
+                    <ArrowDown size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => bringStampForward(page.id, stamp.instanceId)}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"
+                    aria-label="Bring forward"
+                    title="Bring forward"
+                  >
+                    <ArrowUp size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => bringStampToFront(page.id, stamp.instanceId)}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"
+                    aria-label="Bring to front"
+                    title="Bring to front"
+                  >
+                    <ArrowUpToLine size={14} />
+                  </button>
+                  <div className="mx-0.5 h-4 w-[1px] bg-gray-200" />
+                  <button
+                    type="button"
                     onClick={() => updateStamp(page.id, stamp.instanceId, { rotate: stamp.rotate - 15 })}
                     className="flex h-7 w-7 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"
                     aria-label="Rotate stamp left"
@@ -254,6 +291,7 @@ function StampLayer({ page, interactive }: { page: PageData; interactive: boolea
                   >
                     <RotateCw size={14} />
                   </button>
+                  <div className="mx-0.5 h-4 w-[1px] bg-gray-200" />
                   <button
                     type="button"
                     onClick={() => {
