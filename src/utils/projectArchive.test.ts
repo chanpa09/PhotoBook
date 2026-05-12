@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import type { PageData, ProjectSettings } from '../types';
+import type { PageData, ProjectSettings } from '@/types';
 import {
   createProjectArchive,
   readProjectArchive,
@@ -119,6 +119,36 @@ describe('projectArchive', () => {
       settings,
       currentPageIndex: 0,
       images: [{ id: '../image-1', path: 'images/../image-1', type: 'image/png', size: 1 }],
+    }));
+    const file = await createArchiveFile(await zip.generateAsync({ type: 'blob' }));
+
+    await expect(readProjectArchive(file)).rejects.toThrow('Project metadata is invalid.');
+  });
+
+  it('rejects project metadata with non-finite current page index', async () => {
+    const zip = new JSZip();
+    zip.file('project.json', JSON.stringify({
+      schemaVersion: 1,
+      exportedAt: '2026-05-04T00:00:00.000Z',
+      pages: [{ id: 'page-1', layout: '1', photos: [], stamps: [] }],
+      settings,
+      currentPageIndex: null,
+      images: [],
+    }));
+    const file = await createArchiveFile(await zip.generateAsync({ type: 'blob' }));
+
+    await expect(readProjectArchive(file)).rejects.toThrow('Project metadata is invalid.');
+  });
+
+  it('rejects archives with invalid settings', async () => {
+    const zip = new JSZip();
+    zip.file('project.json', JSON.stringify({
+      schemaVersion: 1,
+      exportedAt: '2026-05-04T00:00:00.000Z',
+      pages: [{ id: 'page-1', layout: '1', photos: [], stamps: [] }],
+      settings: { uiLanguage: 'ko' },
+      currentPageIndex: 0,
+      images: [],
     }));
     const file = await createArchiveFile(await zip.generateAsync({ type: 'blob' }));
 

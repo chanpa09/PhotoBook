@@ -1,4 +1,4 @@
-import type { ImportedLayoutType } from '../types';
+import type { ImportedLayoutType } from '@/types';
 
 export const IMPORTED_LAYOUTS_PATH = `${import.meta.env.BASE_URL}data/layouts/a4.json`;
 

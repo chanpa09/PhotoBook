@@ -1,4 +1,4 @@
-import type { BuiltInLayoutType, LayoutType, PageData, ProjectSettings } from './types';
+import type { BuiltInLayoutType, LayoutType, PageData, ProjectSettings } from '@/types';
 
 export const BUILT_IN_LAYOUT_OPTIONS: { id: BuiltInLayoutType; label: string }[] = [
   { id: 'cover', label: '표지 (Cover)' },
@@ -27,6 +27,15 @@ export const BACKGROUND_COLORS = [
 ];
 
 export const BODY_PAGE_COUNT_OPTIONS = [22, 34, 46, 70, 94, 142] as const;
+
+export const PHOTO_FILTERS = [
+  { id: 'none', labelKey: 'none', css: '' },
+  { id: 'grayscale', labelKey: 'grayscale', css: 'grayscale(100%)' },
+  { id: 'sepia', labelKey: 'sepia', css: 'sepia(100%)' },
+  { id: 'invert', labelKey: 'invert', css: 'invert(100%)' },
+  { id: 'warm', labelKey: 'warm', css: 'sepia(30%) saturate(140%)' },
+  { id: 'cool', labelKey: 'cool', css: 'brightness(110%) saturate(80%) sepia(10%) hue-rotate(180deg)' },
+] as const;
 
 export const STORAGE_KEY_PAGES = 'photobook_pages_v1';
 export const STORAGE_KEY_SETTINGS = 'photobook_settings_v1';

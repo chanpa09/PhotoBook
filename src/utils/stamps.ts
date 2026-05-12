@@ -1,4 +1,4 @@
-import type { StampAsset, StampInstance } from '../types';
+import type { StampAsset, StampInstance } from '@/types';
 
 export const A4_PAGE_WIDTH = 794;
 export const A4_PAGE_HEIGHT = 1123;

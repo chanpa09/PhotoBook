@@ -1,4 +1,4 @@
-import type { UILanguage } from './types';
+import type { UILanguage } from '@/types';
 
 export interface ExportMessages {
   hiddenContainerMissing: string;
@@ -145,12 +145,41 @@ export interface AppText {
   photoRemove: string;
   imageLoadError: string;
   imageResolution: string;
+  imageResolutionDescription: string;
   imageResolutionOptions: {
     original: string;
     '4000px': string;
     '2400px': string;
     '1600px': string;
     '800px': string;
+  };
+  storageCleanup: {
+    title: string;
+    description: string;
+    button: string;
+    success: (deletedCount: number) => string;
+    failed: (message: string) => string;
+  };
+  stampActions: {
+    sendToBack: string;
+    sendBackward: string;
+    bringForward: string;
+    bringToFront: string;
+    rotateLeft: string;
+    rotateRight: string;
+    delete: string;
+    resize: string;
+  };
+  textColor: string;
+  photoFilters: string;
+  filterOptions: {
+    none: string;
+    grayscale: string;
+    sepia: string;
+    invert: string;
+    warm: string;
+    cool: string;
+    vivid: string;
   };
   exportMessages: ExportMessages;
 }
@@ -265,6 +294,17 @@ export const TRANSLATIONS: Record<UILanguage, AppText> = {
     font: '폰트',
     textLanguage: '언어',
     fontSize: '글자 크기',
+    textColor: '글자 색상',
+    photoFilters: '사진 필터',
+    filterOptions: {
+      none: '없음',
+      grayscale: '흑백',
+      sepia: '세피아',
+      invert: '반전',
+      warm: '따뜻하게',
+      cool: '차갑게',
+      vivid: '선명하게',
+    },
     selectTextPrompt: 'A4 화면에서 편집할 텍스트를 선택하세요.',
     fontOptions: {
       auto: '자동',
@@ -317,12 +357,32 @@ export const TRANSLATIONS: Record<UILanguage, AppText> = {
     photoRemove: '사진 지우기',
     imageLoadError: '이미지를 불러오는데 실패했습니다.',
     imageResolution: '사진 업로드 크기 제한 (메모리 최적화)',
+    imageResolutionDescription: '앱에 불러올 사진의 최대 크기를 제한하여 메모리 부족 및 크래시 현상을 방지합니다. 크기가 클수록 화질은 좋으나 성능이 저하될 수 있습니다.',
     imageResolutionOptions: {
       original: '원본 유지',
       '4000px': '4000px (고해상도 인쇄)',
       '2400px': '2400px (권장)',
       '1600px': '1600px (경량)',
       '800px': '800px (프리뷰)',
+    },
+    storageCleanup: {
+      title: '저장 공간 정리',
+      description: '현재 작업과 실행 취소 기록에서 쓰지 않는 사진 데이터를 브라우저 저장소에서 삭제합니다.',
+      button: '사용하지 않는 사진 정리',
+      success: (deletedCount) => deletedCount > 0
+        ? `사용하지 않는 사진 ${deletedCount}개를 정리했습니다.`
+        : '정리할 사진 데이터가 없습니다.',
+      failed: (message) => `저장 공간 정리에 실패했습니다: ${message}`,
+    },
+    stampActions: {
+      sendToBack: '맨 뒤로 보내기',
+      sendBackward: '뒤로 보내기',
+      bringForward: '앞으로 가져오기',
+      bringToFront: '맨 앞으로 가져오기',
+      rotateLeft: '왼쪽으로 회전',
+      rotateRight: '오른쪽으로 회전',
+      delete: '스탬프 삭제',
+      resize: '스탬프 크기 조절',
     },
     exportMessages: {
       hiddenContainerMissing: '오류: 숨겨진 페이지 컨테이너를 찾을 수 없습니다.',
@@ -442,6 +502,17 @@ export const TRANSLATIONS: Record<UILanguage, AppText> = {
     font: 'フォント',
     textLanguage: '言語',
     fontSize: '文字サイズ',
+    textColor: '文字の色',
+    photoFilters: '写真フィルター',
+    filterOptions: {
+      none: 'なし',
+      grayscale: '白黒',
+      sepia: 'セピア',
+      invert: '反転',
+      warm: '暖色',
+      cool: '寒色',
+      vivid: 'ビビッド',
+    },
     selectTextPrompt: 'A4画面で編集するテキストを選択してください。',
     fontOptions: {
       auto: '自動',
@@ -494,12 +565,32 @@ export const TRANSLATIONS: Record<UILanguage, AppText> = {
     photoRemove: '写真を削除',
     imageLoadError: '画像の読み込みに失敗しました。',
     imageResolution: '写真アップロードサイズ制限 (メモリ最適化)',
+    imageResolutionDescription: 'アプリに読み込む写真の最大サイズを制限し、メモリ不足やクラッシュを防ぎます。サイズが大きいほど画質は良くなりますが、パフォーマンスが低下する可能性があります。',
     imageResolutionOptions: {
       original: '元のサイズ',
       '4000px': '4000px (高解像度印刷)',
       '2400px': '2400px (推奨)',
       '1600px': '1600px (軽量)',
       '800px': '800px (プレビュー)',
+    },
+    storageCleanup: {
+      title: '保存領域の整理',
+      description: '現在の作業と元に戻す履歴で使われていない写真データをブラウザ保存領域から削除します。',
+      button: '未使用の写真を整理',
+      success: (deletedCount) => deletedCount > 0
+        ? `未使用の写真${deletedCount}件を整理しました。`
+        : '整理する写真データはありません。',
+      failed: (message) => `保存領域の整理に失敗しました: ${message}`,
+    },
+    stampActions: {
+      sendToBack: '最背面へ移動',
+      sendBackward: '背面へ移動',
+      bringForward: '前面へ移動',
+      bringToFront: '最前面へ移動',
+      rotateLeft: '左に回転',
+      rotateRight: '右に回転',
+      delete: 'スタンプを削除',
+      resize: 'スタンプのサイズを変更',
     },
     exportMessages: {
       hiddenContainerMissing: 'エラー: 非表示のページコンテナが見つかりません。',
@@ -511,3 +602,4 @@ export const TRANSLATIONS: Record<UILanguage, AppText> = {
     },
   },
 };
+

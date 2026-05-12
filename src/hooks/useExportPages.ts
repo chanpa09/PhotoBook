@@ -1,12 +1,19 @@
 import { useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { toJpeg, toPng } from 'html-to-image';
-import JSZip from 'jszip';
-import type { ExportMessages } from '../i18n';
-import type { PageData, ProjectSettings } from '../types';
-import { getExportGroups, isTwoPageSpread } from '../utils/layout';
+import type { ExportMessages } from '@/i18n';
+import type { PageData, ProjectSettings } from '@/types';
+import { getExportGroups, isTwoPageSpread } from '@/utils/layout';
+import {
+  getExportWorkerSuccessType,
+  type ExportWorkerRequest,
+  type ExportWorkerResponse,
+  type ExportWorkerSuccessPayload,
+} from '@/workers/exportProtocol';
 
 type ExportFormat = 'png' | 'jpeg';
+const IMAGE_LOAD_TIMEOUT_MS = 15000;
+const EXPORT_WORKER_TIMEOUT_MS = 30000;
 
 export interface ExportProgress {
   current: number;
@@ -48,6 +55,89 @@ const getErrorMessage = (error: unknown) => {
   return String(error);
 };
 
+const waitForFonts = async () => {
+  if ('fonts' in document && document.fonts) {
+    await document.fonts.ready;
+  }
+};
+
+const waitForImages = async (element: HTMLElement) => {
+  const images = Array.from(element.querySelectorAll('img'));
+
+  await Promise.all(images.map((image) => {
+    if (image.complete && image.naturalWidth > 0) return Promise.resolve();
+    if (image.complete) {
+      return Promise.reject(new Error(`Image failed to load: ${image.currentSrc || image.src}`));
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      const timeoutId = globalThis.setTimeout(() => {
+        cleanup();
+        reject(new Error(`Image load timed out: ${image.currentSrc || image.src}`));
+      }, IMAGE_LOAD_TIMEOUT_MS);
+      const handleLoad = () => {
+        cleanup();
+        resolve();
+      };
+      const handleError = () => {
+        cleanup();
+        reject(new Error(`Image failed to load: ${image.currentSrc || image.src}`));
+      };
+      const cleanup = () => {
+        globalThis.clearTimeout(timeoutId);
+        image.removeEventListener('load', handleLoad);
+        image.removeEventListener('error', handleError);
+      };
+
+      image.addEventListener('load', handleLoad, { once: true });
+      image.addEventListener('error', handleError, { once: true });
+    });
+  }));
+};
+
+async function runExportWorker<TType extends ExportWorkerRequest['type']>(
+  worker: Worker,
+  type: TType,
+  payload?: Extract<ExportWorkerRequest, { type: TType }>['payload'],
+): Promise<ExportWorkerSuccessPayload[TType]> {
+  return new Promise((resolve, reject) => {
+    const successType = getExportWorkerSuccessType(type);
+    const timeoutId = globalThis.setTimeout(() => {
+      cleanup();
+      reject(new Error(`Export worker timed out: ${type}`));
+    }, EXPORT_WORKER_TIMEOUT_MS);
+    const cleanup = () => {
+      globalThis.clearTimeout(timeoutId);
+      worker.removeEventListener('message', handleMessage);
+      worker.removeEventListener('error', handleError);
+      worker.removeEventListener('messageerror', handleMessageError);
+    };
+    const handleMessage = (event: MessageEvent) => {
+      const { type: responseType, payload: responsePayload } = event.data as ExportWorkerResponse;
+      if (responseType === successType) {
+        cleanup();
+        resolve(responsePayload as ExportWorkerSuccessPayload[TType]);
+      } else if (responseType === 'ERROR') {
+        cleanup();
+        reject(new Error(responsePayload.message));
+      }
+    };
+    const handleError = (event: ErrorEvent) => {
+      cleanup();
+      reject(new Error(event.message || `Export worker failed: ${type}`));
+    };
+    const handleMessageError = () => {
+      cleanup();
+      reject(new Error(`Export worker message failed: ${type}`));
+    };
+
+    worker.addEventListener('message', handleMessage);
+    worker.addEventListener('error', handleError);
+    worker.addEventListener('messageerror', handleMessageError);
+    worker.postMessage({ type, payload });
+  });
+}
+
 export async function exportRenderedPages({
   hiddenPages,
   pages,
@@ -67,67 +157,80 @@ export async function exportRenderedPages({
 
   onProgress(createInitialExportProgress(exportGroups.length));
   const isZipMode = settings.exportMode === 'zip';
-  const zip = isZipMode ? new JSZip() : null;
-
-  for (let groupIndex = 0; groupIndex < exportGroups.length; groupIndex += 1) {
-    const group = exportGroups[groupIndex];
-    const element = pageElements[groupIndex] as HTMLElement | undefined;
-    const label = isTwoPageSpread(group.pages)
-      ? `${group.pageIndexes[0] + 1}-${group.pageIndexes[group.pageIndexes.length - 1] + 1}`
-      : `${group.pageIndexes[0] + 1}`;
-    if (!element) {
-      throw new Error(messages.pageElementMissing(groupIndex + 1, format.toUpperCase()));
+  
+  let worker: Worker | null = null;
+  try {
+    if (isZipMode) {
+      worker = new Worker(new URL('@/workers/export.worker.ts', import.meta.url), { type: 'module' });
+      await runExportWorker(worker, 'INIT');
     }
 
-    onProgress(createExportProgress(groupIndex + 1, exportGroups.length, label));
+    for (let groupIndex = 0; groupIndex < exportGroups.length; groupIndex += 1) {
+      const group = exportGroups[groupIndex];
+      const element = pageElements[groupIndex] as HTMLElement | undefined;
+      const label = isTwoPageSpread(group.pages)
+        ? `${group.pageIndexes[0] + 1}-${group.pageIndexes[group.pageIndexes.length - 1] + 1}`
+        : `${group.pageIndexes[0] + 1}`;
+      if (!element) {
+        throw new Error(messages.pageElementMissing(groupIndex + 1, format.toUpperCase()));
+      }
 
-    const options = {
-      quality: 0.95,
-      pixelRatio: 2,
-      backgroundColor: settings.backgroundColor,
-      style: {
-        transform: 'scale(1)',
-        transformOrigin: 'top left',
-      },
-    };
+      onProgress(createExportProgress(groupIndex + 1, exportGroups.length, label));
 
-    let dataUrl: string;
-    try {
-      dataUrl = format === 'png'
-        ? await toPng(element, options)
-        : await toJpeg(element, options);
-    } catch (error) {
-      throw new Error(messages.pageSaveFailed(groupIndex + 1, format.toUpperCase(), getErrorMessage(error)), {
-        cause: error,
-      });
+      const options = {
+        quality: 0.95,
+        pixelRatio: 2,
+        backgroundColor: settings.backgroundColor,
+        style: {
+          transform: 'scale(1)',
+          transformOrigin: 'top left',
+        },
+      };
+
+      let dataUrl: string;
+      try {
+        await waitForFonts();
+        await waitForImages(element);
+        dataUrl = format === 'png'
+          ? await toPng(element, options)
+          : await toJpeg(element, options);
+      } catch (error) {
+        throw new Error(messages.pageSaveFailed(groupIndex + 1, format.toUpperCase(), getErrorMessage(error)), {
+          cause: error,
+        });
+      }
+
+      const filename = `photobook-page-${label}.${format}`;
+
+      if (isZipMode && worker) {
+        const base64Data = dataUrl.split(',')[1];
+        await runExportWorker(worker, 'ADD_FILE', { filename, base64Data });
+      } else {
+        const link = document.createElement('a');
+        link.download = filename;
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
     }
 
-    const filename = `photobook-page-${label}.${format}`;
-
-    if (isZipMode && zip) {
-      // dataUrl is data:image/png;base64,xxxx
-      const base64Data = dataUrl.split(',')[1];
-      zip.file(filename, base64Data, { base64: true });
-    } else {
+    if (isZipMode && worker) {
+      const zipFilename = `photobook-export.${format}.zip`;
+      const { blob } = await runExportWorker(worker, 'GENERATE_ZIP', { filename: zipFilename });
       const link = document.createElement('a');
-      link.download = filename;
-      link.href = dataUrl;
+      link.download = zipFilename;
+      link.href = URL.createObjectURL(blob);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      URL.revokeObjectURL(link.href);
     }
-  }
-
-  if (isZipMode && zip) {
-    const zipBlob = await zip.generateAsync({ type: 'blob' });
-    const link = document.createElement('a');
-    link.download = `photobook-export.${format}.zip`;
-    link.href = URL.createObjectURL(zipBlob);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(link.href);
+  } finally {
+    if (worker) {
+      worker.terminate();
+    }
   }
 }
 
@@ -145,7 +248,6 @@ export function useExportPages({ hiddenPagesRef, pages, settings, onError, messa
     setIsExporting(true);
 
     try {
-      // Wait for the hidden pages to render (they are conditionally rendered when isExporting is true)
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
       if (!hiddenPagesRef.current) {

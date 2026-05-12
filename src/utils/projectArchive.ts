@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
-import type { PageData, ProjectSettings } from '../types';
-import { loadImageBlob } from './imageStore';
+import type { PageData, ProjectSettings } from '@/types';
+import { loadImageBlob } from '@/utils/imageStore';
 
 export const PROJECT_ARCHIVE_EXTENSION = 'photobook';
 export const PROJECT_ARCHIVE_ACCEPT = `.${PROJECT_ARCHIVE_EXTENSION}`;

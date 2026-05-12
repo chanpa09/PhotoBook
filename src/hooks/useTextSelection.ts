@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import type { PageData, TextStyle } from '../types';
-import { useProjectStore } from '../store/useProjectStore';
-import type { TextTarget } from '../utils/textStyle';
+import type { PageData, TextStyle, TextTarget } from '@/types';
+import { useProjectStore } from '@/store/useProjectStore';
 import {
   DEFAULT_CAPTION_FONT_SIZE,
   DEFAULT_COVER_DATE_FONT_SIZE,
@@ -13,6 +12,12 @@ import {
 export function useTextSelection(pages: PageData[], visiblePages: PageData[]) {
   const { updatePageData, updateLayoutText, updatePhoto } = useProjectStore();
   const [selectedTextTarget, setSelectedTextTarget] = useState<TextTarget | null>(null);
+  const [selectedTextRect, setSelectedTextRect] = useState<DOMRect | null>(null);
+
+  const clearTextTarget = () => {
+    setSelectedTextTarget(null);
+    setSelectedTextRect(null);
+  };
 
   const selectedTextStyle = (() => {
     if (!selectedTextTarget) return null;
@@ -125,5 +130,8 @@ export function useTextSelection(pages: PageData[], visiblePages: PageData[]) {
     setSelectedTextTarget,
     selectedTextStyle,
     updateSelectedTextStyle,
+    clearTextTarget,
+    selectedTextRect,
+    setSelectedTextRect,
   };
 }

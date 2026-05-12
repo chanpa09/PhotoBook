@@ -6,8 +6,8 @@ import {
   getGridClass,
   getSlotCount,
 } from '../utils/layout';
-import type { PageData, ProjectSettings } from '../types';
-import { A4_PAGE_HEIGHT, A4_PAGE_WIDTH, DEFAULT_STAMP_SIZE } from '../utils/stamps';
+import type { PageData, ProjectSettings } from '@/types';
+import { A4_PAGE_HEIGHT, A4_PAGE_WIDTH, DEFAULT_STAMP_SIZE } from '@/utils/stamps';
 
 interface Props {
   page: PageData;

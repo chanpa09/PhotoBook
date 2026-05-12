@@ -1,4 +1,5 @@
 import localforage from 'localforage';
+import type { PageData } from '@/types';
 
 const imageStore = localforage.createInstance({
   name: 'photobook',
@@ -42,7 +43,28 @@ export async function deleteImage(id: string): Promise<void> {
   await imageStore.removeItem(id);
 }
 
-export async function deleteUnusedImages(activeImageIds: Set<string>): Promise<void> {
+export const collectImageIdsFromPages = (pages: PageData[]) =>
+  new Set(
+    pages.flatMap((page) =>
+      page.photos.flatMap((photo) => photo?.imageId ? [photo.imageId] : []),
+    ),
+  );
+
+export const collectActiveImageIds = (
+  pages: PageData[],
+  historyStates: Array<{ pages?: PageData[] }>,
+) => {
+  const imageIds = collectImageIdsFromPages(pages);
+
+  historyStates.forEach((state) => {
+    if (!state.pages) return;
+    collectImageIdsFromPages(state.pages).forEach((imageId) => imageIds.add(imageId));
+  });
+
+  return imageIds;
+};
+
+export async function deleteUnusedImages(activeImageIds: Set<string>): Promise<number> {
   const imageIdsToDelete: string[] = [];
 
   await imageStore.iterate((_value, key) => {
@@ -52,6 +74,7 @@ export async function deleteUnusedImages(activeImageIds: Set<string>): Promise<v
   });
 
   await Promise.all(imageIdsToDelete.map((id) => deleteImage(id)));
+  return imageIdsToDelete.length;
 }
 
 export function createObjectUrlFromBlob(blob: Blob, id: string): string {

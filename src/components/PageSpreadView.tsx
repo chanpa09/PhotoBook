@@ -1,22 +1,102 @@
-import { memo } from 'react';
-import { A4Page } from './A4Page';
-import type { AppText } from '../i18n';
-import type { PageData, ProjectSettings } from '../types';
-import type { TextTarget } from '../utils/textStyle';
+import { memo, useRef, useEffect, useState } from 'react';
+import type { PageData, ProjectSettings, TextTarget } from '@/types';
+import type { AppText } from '@/i18n';
+import { A4Page } from '@/components/A4Page';
 
-export interface PageSpreadViewProps {
+interface Props {
   pages: PageData[];
   pageIndexes: number[];
   currentPageIndex?: number;
   settings: ProjectSettings;
   text: AppText;
-  onError?: (message: string) => void;
-  onPageSelect?: (pageIndex: number) => void;
-  onTextSelect?: (target: TextTarget) => void;
-  onTextBlur?: (nextFocusedElement: EventTarget | null) => void;
   showPageLabel?: boolean;
   showPrintWarrantyGuide?: boolean;
+  onError?: (message: string) => void;
+  onPageSelect?: (index: number) => void;
+  onTextSelect?: (target: TextTarget) => void;
+  onTextBlur?: (nextFocusedElement: EventTarget | null) => void;
+  onPhotoSelect?: (pageId: string, photoIndex: number, rect: DOMRect) => void;
 }
+
+const VirtualPage = memo(({ 
+  page, 
+  index, 
+  settings, 
+  text, 
+  showPageLabel, 
+  showPrintWarrantyGuide, 
+  onError, 
+  onPageSelect, 
+  onTextSelect, 
+  onTextBlur,
+  onPhotoSelect
+}: {
+  page: PageData;
+  index: number;
+  settings: ProjectSettings;
+  text: AppText;
+  showPageLabel?: boolean;
+  showPrintWarrantyGuide?: boolean;
+  onError?: (message: string) => void;
+  onPageSelect?: (index: number) => void;
+  onTextSelect?: (target: TextTarget) => void;
+  onTextBlur?: (nextFocusedElement: EventTarget | null) => void;
+  onPhotoSelect?: (pageId: string, photoIndex: number, rect: DOMRect) => void;
+}) => {
+  const [isVisible, setIsVisible] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsVisible(entry.isIntersecting);
+      },
+      {
+        rootMargin: '600px', // Proactively render pages before they enter the viewport
+      }
+    );
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div 
+      ref={containerRef} 
+      className="relative shrink-0" 
+      style={{ width: '794px', height: '1123px' }}
+      onClick={() => onPageSelect?.(index)}
+    >
+      {isVisible ? (
+        <A4Page
+          page={page}
+          pageIndex={index}
+          settings={settings}
+          text={text}
+          showPageLabel={showPageLabel}
+          showPrintWarrantyGuide={showPrintWarrantyGuide}
+          onError={onError}
+          onTextSelect={onTextSelect}
+          onTextBlur={onTextBlur}
+          onPhotoSelect={onPhotoSelect}
+        />
+      ) : (
+        <div 
+          className="w-full h-full border border-gray-200 shadow-sm flex items-center justify-center bg-gray-50 rounded-sm"
+          style={{ backgroundColor: settings.backgroundColor }}
+        >
+          <div className="flex flex-col items-center gap-2 text-gray-400">
+            <div className="w-8 h-8 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
+            <span className="text-xs font-medium">Page {index + 1}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
 
 function PageSpreadViewComponent({
   pages,
@@ -24,41 +104,38 @@ function PageSpreadViewComponent({
   currentPageIndex,
   settings,
   text,
+  showPageLabel = true,
+  showPrintWarrantyGuide,
   onError,
   onPageSelect,
   onTextSelect,
   onTextBlur,
-  showPageLabel = true,
-  showPrintWarrantyGuide,
-}: PageSpreadViewProps) {
-  return (
-    <div className="flex h-full w-full bg-gray-200">
-      {pages.map((page, index) => {
-        const pageIndex = pageIndexes[index];
-        const isSelected = currentPageIndex === pageIndex;
+  onPhotoSelect,
+}: Props) {
+  const isSelected = currentPageIndex !== undefined && pageIndexes.includes(currentPageIndex);
 
-        return (
-          <div
-            key={page.id}
-            className={`relative outline outline-offset-[-2px] transition-shadow ${
-              isSelected ? 'z-10 outline-2 outline-blue-500 ring-4 ring-blue-500/25' : 'outline-0'
-            } ${onPageSelect ? 'cursor-pointer' : ''}`}
-            onClick={() => onPageSelect?.(pageIndex)}
-          >
-            <A4Page
-              page={page}
-              pageIndex={pageIndex}
-              settings={settings}
-              text={text}
-              onError={onError}
-              onTextSelect={onTextSelect}
-              onTextBlur={onTextBlur}
-              showPageLabel={showPageLabel}
-              showPrintWarrantyGuide={showPrintWarrantyGuide}
-            />
-          </div>
-        );
-      })}
+  return (
+    <div
+      className={`flex shadow-2xl transition-all duration-300 ring-offset-8 ring-offset-gray-100 ${
+        isSelected ? 'ring-8 ring-blue-500/50 rounded-lg scale-[1.01]' : 'ring-0 rounded-none'
+      }`}
+    >
+      {pages.map((page, i) => (
+        <VirtualPage
+          key={page.id}
+          page={page}
+          index={pageIndexes[i]}
+          settings={settings}
+          text={text}
+          showPageLabel={showPageLabel}
+          showPrintWarrantyGuide={showPrintWarrantyGuide}
+          onError={onError}
+          onPageSelect={onPageSelect}
+          onTextSelect={onTextSelect}
+          onTextBlur={onTextBlur}
+          onPhotoSelect={onPhotoSelect}
+        />
+      ))}
     </div>
   );
 }
@@ -82,10 +159,5 @@ export const PageSpreadView = memo(PageSpreadViewComponent, (prevProps, nextProp
     if (prevProps.pageIndexes[i] !== nextProps.pageIndexes[i]) return false;
   }
 
-  // Event handlers are assumed to be stable or managed by parent (e.g. App.tsx doesn't use useCallback much,
-  // but let's ignore function identity to maximize memo benefits, or rely on the fact they are passed from top level)
-  // Wait, if functions change on every render, `memo` will fail if we check them.
-  // We'll intentionally ignore function props (onError, onPageSelect, etc.) since they are purely bound to the parent's current closure.
-  
   return true;
 });

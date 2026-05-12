@@ -1,6 +1,6 @@
 import type { ChangeEvent } from 'react';
 import { ImagePlus, Maximize, Minimize, Trash2 } from 'lucide-react';
-import type { Photo } from '../types';
+import type { Photo } from '@/types';
 
 interface PhotoActionsProps {
   photo: Photo;

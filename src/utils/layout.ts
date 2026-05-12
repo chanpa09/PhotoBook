@@ -1,5 +1,5 @@
-import type { FrameLayoutDefinition, ImportedLayoutType, LayoutType, PageData } from '../types';
-import { IMPORTED_LAYOUTS_PATH, IMPORTED_LAYOUT_ALIASES } from '../data/importedLayouts';
+import type { FrameLayoutDefinition, ImportedLayoutType, LayoutType, PageData } from '@/types';
+import { IMPORTED_LAYOUTS_PATH, IMPORTED_LAYOUT_ALIASES } from '@/data/importedLayouts';
 
 type LayoutBox = {
   x: number;

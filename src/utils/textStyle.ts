@@ -1,10 +1,4 @@
-import type { TextLanguage, TextStyle } from '../types';
-
-export type TextTarget =
-  | { type: 'coverTitle'; pageId: string }
-  | { type: 'coverDate'; pageId: string }
-  | { type: 'caption'; pageId: string; photoIndex: number }
-  | { type: 'layoutText'; pageId: string; textIndex: number };
+import type { TextLanguage, TextStyle } from '@/types';
 
 export const DEFAULT_COVER_TITLE_FONT_SIZE = 48;
 export const DEFAULT_COVER_DATE_FONT_SIZE = 24;
@@ -16,13 +10,13 @@ export const JAPANESE_FONT_STACK = '"Meiryo", "Yu Gothic", "Hiragino Sans", "Not
 export const MIXED_CJK_FONT_STACK = 'Pretendard, "Meiryo", "Noto Sans CJK JP", "Noto Sans KR", sans-serif';
 
 export const FONT_OPTIONS = [
-  { id: 'auto', label: '자동', fontFamily: '' },
-  { id: 'ko-sans', label: '한국어 고딕', fontFamily: KOREAN_FONT_STACK },
-  { id: 'meiryo', label: 'Meiryo / メイリオ', fontFamily: '"Meiryo", sans-serif' },
-  { id: 'yu-gothic', label: 'Yu Gothic / 游ゴシック', fontFamily: '"Yu Gothic", "YuGothic", sans-serif' },
-  { id: 'mincho', label: '명조 / 明朝', fontFamily: '"Yu Mincho", "Hiragino Mincho ProN", "Noto Serif CJK JP", serif' },
-  { id: 'serif', label: 'Serif', fontFamily: 'Georgia, "Times New Roman", serif' },
-  { id: 'mono', label: 'Mono', fontFamily: '"Courier New", monospace' },
+  { id: 'auto', labelKey: 'auto', label: '자동', fontFamily: '' },
+  { id: 'ko-sans', labelKey: 'koreanSans', label: '한국어 고딕', fontFamily: KOREAN_FONT_STACK },
+  { id: 'meiryo', labelKey: 'meiryo', label: 'Meiryo / メイリオ', fontFamily: '"Meiryo", sans-serif' },
+  { id: 'yu-gothic', labelKey: 'yuGothic', label: 'Yu Gothic / 游ゴシック', fontFamily: '"Yu Gothic", "YuGothic", sans-serif' },
+  { id: 'mincho', labelKey: 'mincho', label: '명조 / 明朝', fontFamily: '"Yu Mincho", "Hiragino Mincho ProN", "Noto Serif CJK JP", serif' },
+  { id: 'serif', labelKey: 'serif', label: 'Serif', fontFamily: 'Georgia, "Times New Roman", serif' },
+  { id: 'mono', labelKey: 'mono', label: 'Mono', fontFamily: '"Courier New", monospace' },
 ];
 
 export const LANGUAGE_OPTIONS: { id: 'auto' | TextLanguage; label: string }[] = [
@@ -55,6 +49,7 @@ export const getDefaultTextStyle = (fontSize: number): Required<TextStyle> => ({
   fontMode: 'auto',
   fontFamily: '',
   fontSize,
+  color: '#000000',
   languageMode: 'auto',
   language: 'mixed',
 });

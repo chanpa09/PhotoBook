@@ -23,6 +23,7 @@ export interface TextStyle {
   fontMode?: FontMode;
   fontFamily?: string;
   fontSize?: number;
+  color?: string;
   languageMode?: TextLanguageMode;
   language?: TextLanguage;
 }
@@ -40,6 +41,7 @@ export interface Photo {
   fit?: 'contain' | 'cover';
   scale?: number;
   offset?: { x: number; y: number };
+  filter?: string;
   captionStyle?: TextStyle;
 }
 
@@ -121,3 +123,9 @@ export interface ProjectSettings {
   exportMode?: 'individual' | 'zip';
   showPrintWarrantyGuide?: boolean;
 }
+
+export type TextTarget =
+  | { type: 'coverTitle'; pageId: string }
+  | { type: 'coverDate'; pageId: string }
+  | { type: 'caption'; pageId: string; photoIndex: number }
+  | { type: 'layoutText'; pageId: string; textIndex: number };

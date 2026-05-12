@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { FrameLayoutDefinition, PageData } from '../types';
+import type { FrameLayoutDefinition, PageData } from '@/types';
 import {
   applyLayoutToPage,
   getExportGroups,

@@ -1,7 +1,12 @@
-import { X, Languages, Image as ImageIcon } from 'lucide-react';
-import { useProjectStore } from '../store/useProjectStore';
-import { IMAGE_RESOLUTION_OPTIONS, DEFAULT_IMAGE_MAX_RESOLUTION } from '../utils/imageResize';
-import { TRANSLATIONS } from '../i18n';
+import { useState } from 'react';
+import { useStore } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
+import { X, Languages, Image as ImageIcon, Database, Loader2 } from 'lucide-react';
+import { useProjectStore } from '@/store/useProjectStore';
+import { IMAGE_RESOLUTION_OPTIONS, DEFAULT_IMAGE_MAX_RESOLUTION } from '@/utils/imageResize';
+import { TRANSLATIONS } from '@/i18n';
+import { collectActiveImageIds, deleteUnusedImages } from '@/utils/imageStore';
+import type { PageData } from '@/types';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -9,9 +14,39 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const { settings, setSettings } = useProjectStore();
+  const { settings, setSettings } = useProjectStore(
+    useShallow((state) => ({
+      settings: state.settings,
+      setSettings: state.setSettings,
+    })),
+  );
+  const { pastStates, futureStates } = useStore(
+    useProjectStore.temporal,
+    useShallow((state) => ({
+      pastStates: state.pastStates,
+      futureStates: state.futureStates,
+    })),
+  );
+  const [cleanupStatus, setCleanupStatus] = useState<string | null>(null);
+  const [isCleaningStorage, setIsCleaningStorage] = useState(false);
   const uiLanguage = settings.uiLanguage ?? 'ko';
   const text = TRANSLATIONS[uiLanguage];
+
+  const handleStorageCleanup = async () => {
+    setIsCleaningStorage(true);
+    setCleanupStatus(null);
+
+    try {
+      const historyStates = [...pastStates, ...futureStates] as Array<{ pages?: PageData[] }>;
+      const deletedCount = await deleteUnusedImages(collectActiveImageIds(useProjectStore.getState().pages, historyStates));
+      setCleanupStatus(text.storageCleanup.success(deletedCount));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setCleanupStatus(text.storageCleanup.failed(message));
+    } finally {
+      setIsCleaningStorage(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -71,9 +106,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               {text.imageResolution}
             </h3>
             <p className="text-xs text-gray-500 mb-3 leading-relaxed">
-              {uiLanguage === 'ko' 
-                ? '앱에 불러올 사진의 최대 크기를 제한하여 메모리 부족 및 크래시 현상을 방지합니다. 크기가 클수록 화질은 좋으나 성능이 저하될 수 있습니다.'
-                : 'アプリに読み込む写真の最大サイズを制限し、メモリ不足やクラッシュを防ぎます。サイズが大きいほど画質は良くなりますが、パフォーマンスが低下する可能性があります。'}
+              {text.imageResolutionDescription}
             </p>
             <select
               value={settings.imageMaxResolution ?? DEFAULT_IMAGE_MAX_RESOLUTION}
@@ -86,6 +119,32 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="h-px bg-gray-100" />
+
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-3">
+              <Database size={16} className="text-blue-600" />
+              {text.storageCleanup.title}
+            </h3>
+            <p className="text-xs text-gray-500 mb-3 leading-relaxed">
+              {text.storageCleanup.description}
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleStorageCleanup()}
+              disabled={isCleaningStorage}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+            >
+              {isCleaningStorage ? <Loader2 size={16} className="animate-spin" /> : <Database size={16} />}
+              {text.storageCleanup.button}
+            </button>
+            {cleanupStatus && (
+              <p className="mt-2 text-xs text-gray-600">
+                {cleanupStatus}
+              </p>
+            )}
           </div>
         </div>
 
