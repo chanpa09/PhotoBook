@@ -125,11 +125,33 @@ export function useTextSelection(pages: PageData[], visiblePages: PageData[]) {
     });
   };
 
+  const removeSelectedText = () => {
+    if (!selectedTextTarget) return;
+
+    const targetPage = pages.find((page) => page.id === selectedTextTarget.pageId);
+    if (!targetPage) return;
+
+    if (selectedTextTarget.type === 'coverTitle') {
+      updatePageData(targetPage.id, { coverTitle: '' });
+    } else if (selectedTextTarget.type === 'coverDate') {
+      updatePageData(targetPage.id, { coverDate: '' });
+    } else if (selectedTextTarget.type === 'layoutText') {
+      updateLayoutText(targetPage.id, selectedTextTarget.textIndex, { value: '' });
+    } else if (selectedTextTarget.type === 'caption') {
+      const photo = targetPage.photos[selectedTextTarget.photoIndex];
+      if (photo) {
+        updatePhoto(targetPage.id, selectedTextTarget.photoIndex, { caption: '' });
+      }
+    }
+    clearTextTarget();
+  };
+
   return {
     selectedTextTarget,
     setSelectedTextTarget,
     selectedTextStyle,
     updateSelectedTextStyle,
+    removeSelectedText,
     clearTextTarget,
     selectedTextRect,
     setSelectedTextRect,

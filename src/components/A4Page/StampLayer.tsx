@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { RotateCcw, RotateCw, Trash2, ArrowUpToLine, ArrowUp, ArrowDown, ArrowDownToLine } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
@@ -26,6 +26,8 @@ export function StampLayer({ page, interactive, text }: Props) {
     bringStampForward,
     sendStampBackward,
     sendStampToBack,
+    selectedStamp,
+    setSelectedStampId,
   } = useProjectStore(
     useShallow((state) => ({
       updateStamp: state.updateStamp,
@@ -34,9 +36,12 @@ export function StampLayer({ page, interactive, text }: Props) {
       bringStampForward: state.bringStampForward,
       sendStampBackward: state.sendStampBackward,
       sendStampToBack: state.sendStampToBack,
+      selectedStamp: state.selectedStampId,
+      setSelectedStampId: state.setSelectedStampId,
     })),
   );
-  const [selectedStampId, setSelectedStampId] = useState<string | null>(null);
+
+  const selectedStampId = selectedStamp?.pageId === page.id ? selectedStamp.instanceId : null;
   const activeStampMode = useRef<'move' | 'resize' | null>(null);
   const activeStampId = useRef<string | null>(null);
   const activePointerId = useRef<number | null>(null);
@@ -125,7 +130,7 @@ export function StampLayer({ page, interactive, text }: Props) {
       window.removeEventListener('pointercancel', handlePointerUp);
       window.removeEventListener('pointerdown', handleDocumentPointerDown, true);
     };
-  }, [interactive, page.id, updateStamp]);
+  }, [interactive, page.id, updateStamp, setSelectedStampId]);
 
   const handleStampPointerDown = (event: ReactPointerEvent<HTMLDivElement>, stamp: StampInstance) => {
     if (!interactive) return;
@@ -140,7 +145,7 @@ export function StampLayer({ page, interactive, text }: Props) {
     startStampPointer.current = { x: event.clientX, y: event.clientY };
     lastStampPointer.current = { x: event.clientX, y: event.clientY };
     draftStampPosition.current = { x: stamp.x, y: stamp.y };
-    setSelectedStampId(stamp.instanceId);
+    setSelectedStampId({ pageId: page.id, instanceId: stamp.instanceId });
     bringStampToFront(page.id, stamp.instanceId);
     event.preventDefault();
     event.stopPropagation();
@@ -162,7 +167,7 @@ export function StampLayer({ page, interactive, text }: Props) {
     startStampSize.current = stampSize;
     startStampWidth.current = stampSize * stamp.scale;
     draftStampScale.current = stamp.scale;
-    setSelectedStampId(stamp.instanceId);
+    setSelectedStampId({ pageId: page.id, instanceId: stamp.instanceId });
     bringStampToFront(page.id, stamp.instanceId);
     event.preventDefault();
     event.stopPropagation();

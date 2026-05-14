@@ -23,15 +23,10 @@ interface WorkspaceProps {
   setSelectedTextTarget: (target: TextTarget | null) => void;
   selectedTextStyle: { target: TextTarget; style: Required<TextStyle> } | null;
   updateSelectedTextStyle: (updates: TextStyle) => void;
+  removeSelectedText: () => void;
   clearTextTarget: () => void;
   selectedTextRect: DOMRect | null;
   setSelectedTextRect: (rect: DOMRect | null) => void;
-}
-
-interface SelectedPhoto {
-  pageId: string;
-  photoIndex: number;
-  rect: DOMRect;
 }
 
 export function Workspace({
@@ -43,6 +38,7 @@ export function Workspace({
   setSelectedTextTarget,
   selectedTextStyle,
   updateSelectedTextStyle,
+  removeSelectedText,
   clearTextTarget,
   selectedTextRect,
   setSelectedTextRect,
@@ -54,6 +50,8 @@ export function Workspace({
     currentPageIndex,
     setCurrentPageIndex,
     updatePhoto,
+    selectedPhoto,
+    setSelectedPhoto,
   } = useProjectStore(
     useShallow((state) => ({
       isLoaded: state.isLoaded,
@@ -62,10 +60,12 @@ export function Workspace({
       currentPageIndex: state.currentPageIndex,
       setCurrentPageIndex: state.setCurrentPageIndex,
       updatePhoto: state.updatePhoto,
+      selectedPhoto: state.selectedPhoto,
+      setSelectedPhoto: state.setSelectedPhoto,
     })),
   );
 
-  const [selectedPhoto, setSelectedPhoto] = useState<SelectedPhoto | null>(null);
+  const [localSelectedPhotoRect, setLocalSelectedPhotoRect] = useState<DOMRect | null>(null);
   const pageViewportRef = useRef<HTMLDivElement>(null);
 
   const visibleSpread = useMemo(
@@ -93,7 +93,8 @@ export function Workspace({
     if (photoIndex === -1) {
       setSelectedTextRect(rect);
     } else {
-      setSelectedPhoto({ pageId, photoIndex, rect });
+      setSelectedPhoto({ pageId, photoIndex });
+      setLocalSelectedPhotoRect(rect);
       clearTextTarget();
     }
   };
@@ -115,6 +116,7 @@ export function Workspace({
           }
           if (!target.closest('[data-photo-index]')) {
             setSelectedPhoto(null);
+            setLocalSelectedPhotoRect(null);
           }
         }}
       >
@@ -154,21 +156,25 @@ export function Workspace({
             rect={selectedTextRect}
             style={selectedTextStyle.style}
             onStyleChange={updateSelectedTextStyle}
+            onTextRemove={removeSelectedText}
             text={text}
             onClose={clearTextTarget}
           />
         )}
 
-        {selectedPhoto && selectedPhotoData && (
+        {selectedPhoto && selectedPhotoData && localSelectedPhotoRect && (
           <FloatingToolbar
             type="photo"
-            rect={selectedPhoto.rect}
+            rect={localSelectedPhotoRect}
             photo={selectedPhotoData}
             onPhotoChange={(updates) => {
               updatePhoto(selectedPhoto.pageId, selectedPhoto.photoIndex, updates);
             }}
             text={text}
-            onClose={() => setSelectedPhoto(null)}
+            onClose={() => {
+              setSelectedPhoto(null);
+              setLocalSelectedPhotoRect(null);
+            }}
           />
         )}
       </div>

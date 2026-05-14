@@ -40,13 +40,20 @@ function App() {
     })),
   );
 
-  const { undo, redo } = useStore(
+  const { undo, redo, clearHistory } = useStore(
     useProjectStore.temporal,
     useShallow((state) => ({
       undo: state.undo,
       redo: state.redo,
+      clearHistory: state.clear,
     })),
   );
+
+  useEffect(() => {
+    if (isLoaded) {
+      clearHistory();
+    }
+  }, [isLoaded, clearHistory]);
 
   const [isOverviewOpen, setIsOverviewOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -108,6 +115,7 @@ function App() {
     setSelectedTextTarget,
     selectedTextStyle,
     updateSelectedTextStyle,
+    removeSelectedText,
     clearTextTarget,
     selectedTextRect,
     setSelectedTextRect,
@@ -172,6 +180,7 @@ function App() {
             setSelectedTextTarget={setSelectedTextTarget}
             selectedTextStyle={selectedTextStyle}
             updateSelectedTextStyle={updateSelectedTextStyle}
+            removeSelectedText={removeSelectedText}
             clearTextTarget={clearTextTarget}
             selectedTextRect={selectedTextRect}
             setSelectedTextRect={setSelectedTextRect}

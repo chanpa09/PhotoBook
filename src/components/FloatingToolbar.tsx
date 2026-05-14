@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Palette, Type, ChevronDown, Check,
   Maximize, Minimize, Trash2, SlidersHorizontal,
-  ChevronRight
+  ChevronRight, AlignLeft, AlignCenter, AlignRight,
+  Bold, Italic, PaintBucket
 } from 'lucide-react';
 import type { TextStyle, Photo } from '@/types';
 import type { AppText } from '@/i18n';
@@ -16,6 +17,7 @@ interface Props {
   photo?: Photo;
   onStyleChange?: (updates: Partial<TextStyle>) => void;
   onPhotoChange?: (updates: Partial<Photo> | null) => void;
+  onTextRemove?: () => void;
   onClose?: () => void;
   text: AppText;
 }
@@ -42,10 +44,11 @@ export function FloatingToolbar({
   photo,
   onStyleChange,
   onPhotoChange,
+  onTextRemove,
   onClose,
   text,
 }: Props) {
-  const [activeMenu, setActivePanel] = useState<'main' | 'font' | 'color' | 'filter' | 'zoom'>('main');
+  const [activeMenu, setActivePanel] = useState<'main' | 'font' | 'color' | 'filter' | 'zoom' | 'bgColor'>('main');
   const toolbarRef = useRef<HTMLDivElement>(null);
 
   // Position logic: prefer top, fallback to bottom
@@ -70,6 +73,9 @@ export function FloatingToolbar({
   const handleRemove = () => {
     if (type === 'photo' && onPhotoChange) {
       onPhotoChange(null);
+    }
+    if (type === 'text' && onTextRemove) {
+      onTextRemove();
     }
     onClose?.();
   };
@@ -108,7 +114,7 @@ export function FloatingToolbar({
                 className="flex items-center justify-center px-3 py-1.5 hover:bg-gray-50 rounded-lg transition-colors"
                 title={text.textColor}
               >
-                <div 
+                <div
                   className="h-4 w-4 rounded-full border border-gray-200 shadow-sm"
                   style={{ backgroundColor: style?.color || '#000000' }}
                 />
@@ -122,6 +128,47 @@ export function FloatingToolbar({
                   className="w-10 bg-transparent text-center text-xs font-bold text-gray-700 focus:outline-none"
                 />
               </div>
+
+              <button
+                onClick={() => onStyleChange?.({ fontWeight: style?.fontWeight === 'bold' ? 'normal' : 'bold' })}
+                className={`flex items-center justify-center p-1.5 rounded-lg transition-colors ${style?.fontWeight === 'bold' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-50 text-gray-700'}`}
+              >
+                <Bold size={14} />
+              </button>
+
+              <button
+                onClick={() => onStyleChange?.({ fontStyle: style?.fontStyle === 'italic' ? 'normal' : 'italic' })}
+                className={`flex items-center justify-center p-1.5 rounded-lg transition-colors ${style?.fontStyle === 'italic' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-50 text-gray-700'}`}
+              >
+                <Italic size={14} />
+              </button>
+
+              <button
+                onClick={() => {
+                  const aligns: TextStyle['textAlign'][] = ['left', 'center', 'right'];
+                  const currentIndex = aligns.indexOf(style?.textAlign || 'center');
+                  const nextAlign = aligns[(currentIndex + 1) % aligns.length];
+                  onStyleChange?.({ textAlign: nextAlign });
+                }}
+                className="flex items-center justify-center p-1.5 hover:bg-gray-50 rounded-lg transition-colors text-gray-700"
+              >
+                {style?.textAlign === 'left' && <AlignLeft size={14} />}
+                {(style?.textAlign === 'center' || !style?.textAlign) && <AlignCenter size={14} />}
+                {style?.textAlign === 'right' && <AlignRight size={14} />}
+              </button>
+
+              <button
+                onClick={() => setActivePanel('bgColor')}
+                className="flex items-center justify-center px-3 py-1.5 hover:bg-gray-50 rounded-lg transition-colors"
+                title="Background Color"
+              >
+                <div
+                  className="flex items-center justify-center h-4 w-4 rounded-full border border-gray-200 shadow-sm overflow-hidden"
+                  style={{ backgroundColor: style?.backgroundColor || 'transparent' }}
+                >
+                  <PaintBucket size={10} className={style?.backgroundColor && style.backgroundColor !== 'transparent' ? 'text-white/80' : 'text-gray-400'} />
+                </div>
+              </button>
             </>
           )}
 
@@ -160,7 +207,11 @@ export function FloatingToolbar({
 
           <div className="flex items-center px-1">
             <button
-              onClick={handleRemove}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleRemove();
+              }}
               className="flex items-center justify-center p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
               title={text.photoRemove}
             >
@@ -176,6 +227,7 @@ export function FloatingToolbar({
               {activeMenu === 'color' && text.textColor}
               {activeMenu === 'filter' && text.photoFilters}
               {activeMenu === 'zoom' && 'Zoom'}
+              {activeMenu === 'bgColor' && 'BG Color'}
             </span>
             <button 
               onClick={() => setActivePanel('main')}
@@ -214,6 +266,34 @@ export function FloatingToolbar({
                     style={{ backgroundColor: c }}
                   >
                     {style?.color === c && <Check size={12} className={c === '#FFFFFF' ? 'text-gray-900' : 'text-white'} />}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {activeMenu === 'bgColor' && (
+              <div className="grid grid-cols-4 gap-2 p-1">
+                <button
+                  onClick={() => {
+                    onStyleChange?.({ backgroundColor: 'transparent' });
+                    setActivePanel('main');
+                  }}
+                  className="group relative flex aspect-square items-center justify-center rounded-full border border-gray-100 shadow-sm transition-transform hover:scale-110 bg-white"
+                  title="None"
+                >
+                  <Trash2 size={12} className="text-gray-400" />
+                </button>
+                {COLORS.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => {
+                      onStyleChange?.({ backgroundColor: c });
+                      setActivePanel('main');
+                    }}
+                    className="group relative flex aspect-square items-center justify-center rounded-full border border-gray-100 shadow-sm transition-transform hover:scale-110"
+                    style={{ backgroundColor: c }}
+                  >
+                    {style?.backgroundColor === c && <Check size={12} className={c === '#FFFFFF' ? 'text-gray-900' : 'text-white'} />}
                   </button>
                 ))}
               </div>

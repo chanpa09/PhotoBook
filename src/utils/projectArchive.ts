@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import type { PageData, ProjectSettings } from '@/types';
-import { loadImageBlob } from '@/utils/imageStore';
+import { loadImageBlob, loadOriginalImageBlob } from '@/utils/imageStore';
 
 export const PROJECT_ARCHIVE_EXTENSION = 'photobook';
 export const PROJECT_ARCHIVE_ACCEPT = `.${PROJECT_ARCHIVE_EXTENSION}`;
@@ -83,13 +83,23 @@ const preparePagesForArchive = async (pages: PageData[]) => {
 
   for (const page of preparedPages) {
     for (const photo of page.photos) {
-      if (!photo?.imageId || imageBlobs.has(photo.imageId)) continue;
+      if (!photo) continue;
 
-      const blob = await loadImageBlob(photo.imageId);
-      if (!blob) {
-        throw new Error(`Image data is missing: ${photo.imageId}`);
+      if (photo.imageId && !imageBlobs.has(photo.imageId)) {
+        const blob = await loadImageBlob(photo.imageId);
+        if (!blob) {
+          throw new Error(`Image data is missing: ${photo.imageId}`);
+        }
+        imageBlobs.set(photo.imageId, blob);
       }
-      imageBlobs.set(photo.imageId, blob);
+
+      if (photo.originalImageId && !imageBlobs.has(photo.originalImageId)) {
+        const blob = await loadOriginalImageBlob(photo.originalImageId);
+        if (!blob) {
+          throw new Error(`Image data is missing: ${photo.originalImageId}`);
+        }
+        imageBlobs.set(photo.originalImageId, blob);
+      }
     }
   }
 
@@ -162,6 +172,7 @@ const isPhotoSlot = (value: unknown): boolean => {
     && typeof value.url === 'string'
     && typeof value.caption === 'string'
     && (value.imageId === undefined || typeof value.imageId === 'string')
+    && (value.originalImageId === undefined || typeof value.originalImageId === 'string')
   );
 };
 
@@ -204,7 +215,10 @@ const isProjectArchiveImage = (value: unknown): value is ProjectArchiveImage => 
 const collectReferencedImageIds = (pages: PageData[]) =>
   new Set(
     pages.flatMap((page) =>
-      page.photos.flatMap((photo) => photo?.imageId ? [photo.imageId] : []),
+      page.photos.flatMap((photo) => {
+        if (!photo) return [];
+        return [photo.imageId, photo.originalImageId].filter((id): id is string => Boolean(id));
+      }),
     ),
   );
 

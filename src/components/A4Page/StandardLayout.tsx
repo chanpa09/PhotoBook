@@ -31,6 +31,7 @@ interface Props {
   onDragOver: (event: DragEvent<HTMLDivElement>, index: number) => void;
   onDragLeave: (event: DragEvent<HTMLDivElement>) => void;
   onPhotoPointerDown: (event: ReactPointerEvent<HTMLElement>, index: number) => void;
+  onPhotoWheel: (event: React.WheelEvent<HTMLElement>, index: number) => void;
   onToggleFit: (index: number, currentPhoto: Photo) => void;
   onRemovePhoto: (index: number) => void;
   onZoomChange: (index: number, scale: number) => void;
@@ -55,6 +56,7 @@ interface DroppableFrameSlotProps {
   onDragLeave: (event: DragEvent<HTMLDivElement>) => void;
   onDrop: (event: DragEvent<HTMLDivElement>, index: number) => void;
   onPhotoPointerDown: (event: ReactPointerEvent<HTMLElement>, index: number) => void;
+  onPhotoWheel: (event: React.WheelEvent<HTMLElement>, index: number) => void;
   onPhotoSelect?: (pageId: string, index: number, rect: DOMRect) => void;
   onToggleFit: (index: number, currentPhoto: Photo) => void;
   onRemovePhoto: (index: number) => void;
@@ -71,6 +73,7 @@ function DroppableFrameSlot({
   onDragLeave,
   onDrop,
   onPhotoPointerDown,
+  onPhotoWheel,
   onPhotoSelect,
   onToggleFit,
   onRemovePhoto,
@@ -112,6 +115,7 @@ function DroppableFrameSlot({
       {photo ? (
         <div className="w-full h-full relative overflow-hidden bg-black/5 flex items-center justify-center border border-gray-100 cursor-move touch-none"
           onPointerDown={(event) => onPhotoPointerDown(event, slotIndex)}
+          onWheel={(event) => onPhotoWheel(event, slotIndex)}
           onClick={(e) => handlePhotoClick(e, slotIndex)}
         >
           <div
@@ -170,6 +174,7 @@ interface DroppableGridSlotProps {
   onDragLeave: (event: DragEvent<HTMLDivElement>) => void;
   onDrop: (event: DragEvent<HTMLDivElement>, index: number) => void;
   onPhotoPointerDown: (event: ReactPointerEvent<HTMLElement>, index: number) => void;
+  onPhotoWheel: (event: React.WheelEvent<HTMLElement>, index: number) => void;
   onPhotoSelect?: (pageId: string, index: number, rect: DOMRect) => void;
   onToggleFit: (index: number, currentPhoto: Photo) => void;
   onRemovePhoto: (index: number) => void;
@@ -188,6 +193,7 @@ function DroppableGridSlot({
   onDragLeave,
   onDrop,
   onPhotoPointerDown,
+  onPhotoWheel,
   onPhotoSelect,
   onToggleFit,
   onRemovePhoto,
@@ -230,6 +236,7 @@ function DroppableGridSlot({
         <div className="w-full h-full flex flex-col relative min-h-0">
           <div className="flex-1 min-h-0 w-full relative overflow-hidden bg-black/5 flex items-center justify-center border border-gray-100 rounded-md cursor-move touch-none"
             onPointerDown={(event) => onPhotoPointerDown(event, slotIndex)}
+            onWheel={(event) => onPhotoWheel(event, slotIndex)}
             onClick={(e) => handlePhotoClick(e, slotIndex)}
           >
             <img
@@ -303,6 +310,7 @@ export function StandardLayout({
   onDragOver,
   onDragLeave,
   onPhotoPointerDown,
+  onPhotoWheel,
   onToggleFit,
   onRemovePhoto,
   onZoomChange,
@@ -379,6 +387,7 @@ export function StandardLayout({
             onDragLeave={onDragLeave}
             onDrop={onDrop}
             onPhotoPointerDown={onPhotoPointerDown}
+            onPhotoWheel={onPhotoWheel}
             onPhotoSelect={onPhotoSelect}
             onToggleFit={onToggleFit}
             onRemovePhoto={onRemovePhoto}
@@ -403,6 +412,7 @@ export function StandardLayout({
           onDragLeave={onDragLeave}
           onDrop={onDrop}
           onPhotoPointerDown={onPhotoPointerDown}
+          onPhotoWheel={onPhotoWheel}
           onPhotoSelect={onPhotoSelect}
           onToggleFit={onToggleFit}
           onRemovePhoto={onRemovePhoto}

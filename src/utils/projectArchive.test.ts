@@ -11,6 +11,7 @@ const storedImages = vi.hoisted(() => new Map<string, Blob>());
 
 vi.mock('./imageStore', () => ({
   loadImageBlob: vi.fn((id: string) => Promise.resolve(storedImages.get(id) ?? null)),
+  loadOriginalImageBlob: vi.fn((id: string) => Promise.resolve(storedImages.get(id) ?? null)),
 }));
 
 const settings: ProjectSettings = {
@@ -77,6 +78,30 @@ describe('projectArchive', () => {
     expect(imported.images).toHaveLength(1);
     expect(imported.images[0].id).toBe(photo?.imageId);
     await expect(imported.images[0].blob.text()).resolves.toBe('hello');
+  });
+
+  it('saves and reads original high-resolution image references', async () => {
+    storedImages.set('image-1', new Blob(['display-image'], { type: 'image/jpeg' }));
+    storedImages.set('original-1', new Blob(['original-image'], { type: 'image/jpeg' }));
+    const pages: PageData[] = [{
+      id: 'page-1',
+      layout: '1',
+      photos: [{
+        id: 'photo-1',
+        imageId: 'image-1',
+        originalImageId: 'original-1',
+        url: 'blob:http://localhost/image-1',
+        caption: 'caption',
+      }],
+      stamps: [],
+    }];
+
+    const archive = await createProjectArchive({ pages, settings, currentPageIndex: 0 });
+    const imported = await readProjectArchive(await createArchiveFile(archive));
+
+    expect(imported.pages[0].photos[0]?.originalImageId).toBe('original-1');
+    expect(imported.images.map((image) => image.id).sort()).toEqual(['image-1', 'original-1']);
+    await expect(imported.images.find((image) => image.id === 'original-1')?.blob.text()).resolves.toBe('original-image');
   });
 
   it('rejects archives with invalid project metadata', async () => {

@@ -1,12 +1,12 @@
 import JSZip from 'jszip';
-import type { ExportWorkerRequest } from '@/workers/exportProtocol';
+import { validateExportWorkerRequest } from '@/workers/exportProtocol';
 
 let zip: JSZip | null = null;
 
-self.onmessage = async (event: MessageEvent<ExportWorkerRequest>) => {
-  const { type, payload } = event.data;
-
+self.onmessage = async (event: MessageEvent<unknown>) => {
   try {
+    const { type, payload } = validateExportWorkerRequest(event.data);
+
     switch (type) {
       case 'INIT':
         zip = new JSZip();
@@ -15,7 +15,6 @@ self.onmessage = async (event: MessageEvent<ExportWorkerRequest>) => {
 
       case 'ADD_FILE': {
         if (!zip) throw new Error('Worker not initialized');
-        if (!payload) throw new Error('ADD_FILE payload is missing');
         const { filename, base64Data } = payload;
         zip.file(filename, base64Data, { base64: true });
         self.postMessage({ type: 'ADD_FILE_SUCCESS', payload: { filename } });
@@ -24,7 +23,6 @@ self.onmessage = async (event: MessageEvent<ExportWorkerRequest>) => {
 
       case 'GENERATE_ZIP': {
         if (!zip) throw new Error('Worker not initialized');
-        if (!payload) throw new Error('GENERATE_ZIP payload is missing');
         const { filename: zipFilename } = payload;
         const blob = await zip.generateAsync({
           type: 'blob',
@@ -35,9 +33,6 @@ self.onmessage = async (event: MessageEvent<ExportWorkerRequest>) => {
         zip = null; // Reset
         break;
       }
-
-      default:
-        console.warn('Unknown message type:', type);
     }
   } catch (error) {
     self.postMessage({

@@ -10,7 +10,7 @@ import {
   fetchImportedFrameLayouts,
   setImportedFrameLayouts,
 } from '../../utils/layout';
-import { collectImageIdsFromPages, deleteUnusedImages, restoreImageUrls, saveImage } from '@/utils/imageStore';
+import { collectImageIdsFromPages, deleteUnusedImages, restoreImageUrls, saveImage, saveOriginalImage } from '@/utils/imageStore';
 import {
   clampPageIndex,
   normalizePages,
@@ -56,7 +56,17 @@ export const createProjectSlice: StateCreator<ProjectState, [], [], ProjectSlice
   },
 
   replaceProject: async (project) => {
-    await Promise.all(project.images.map((image) => saveImage(image.id, image.blob)));
+    const originalImageIds = new Set(
+      project.pages.flatMap((page) =>
+        page.photos.flatMap((photo) => photo?.originalImageId ? [photo.originalImageId] : []),
+      ),
+    );
+
+    await Promise.all(project.images.map((image) => (
+      originalImageIds.has(image.id)
+        ? saveOriginalImage(image.id, image.blob)
+        : saveImage(image.id, image.blob)
+    )));
 
     const nextPages = normalizePages(project.pages);
     const restoredPages = await restoreImageUrls(nextPages);

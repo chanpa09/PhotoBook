@@ -65,6 +65,37 @@ export const createStampSlice: StateCreator<ProjectState, [], [], StampSlice> = 
     set({ pages: nextPages });
   },
 
+  addStampInstance: (pageId, stamp, position) => {
+    const nextPages = get().pages.map((page) => {
+      if (page.id !== pageId) return page;
+
+      const stamps = page.stamps ?? [];
+      const nextZIndex = Math.max(0, ...stamps.map((item) => item.zIndex)) + 1;
+      const nextStamp: StampInstance = {
+        ...stamp,
+        instanceId: crypto.randomUUID(),
+        x: position?.x ?? stamp.x + 20,
+        y: position?.y ?? stamp.y + 20,
+        zIndex: nextZIndex,
+      };
+
+      return {
+        ...page,
+        stamps: [...stamps, nextStamp],
+      };
+    });
+
+    set({ pages: nextPages });
+  },
+
+  duplicateStamp: (pageId, instanceId, position) => {
+    const page = get().pages.find((item) => item.id === pageId);
+    const sourceStamp = page?.stamps?.find((stamp) => stamp.instanceId === instanceId);
+    if (!sourceStamp) return;
+
+    get().addStampInstance(pageId, sourceStamp, position);
+  },
+
   bringStampToFront: (pageId, instanceId) => {
     const nextPages = get().pages.map((page) => {
       if (page.id !== pageId) return page;

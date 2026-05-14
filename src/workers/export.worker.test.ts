@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ExportWorkerRequest, ExportWorkerResponse } from '@/workers/exportProtocol';
+import type { ExportWorkerResponse } from '@/workers/exportProtocol';
 
 type WorkerSelf = {
-  onmessage?: (event: MessageEvent<ExportWorkerRequest>) => Promise<void>;
+  onmessage?: (event: MessageEvent<unknown>) => Promise<void>;
   postMessage: (message: ExportWorkerResponse) => void;
   process: NodeJS.Process;
 };
@@ -27,9 +27,9 @@ async function loadWorker() {
 
 const sendMessage = async (
   workerSelf: Required<WorkerSelf>,
-  message: ExportWorkerRequest,
+  message: unknown,
 ) => {
-  await workerSelf.onmessage({ data: message } as MessageEvent<ExportWorkerRequest>);
+  await workerSelf.onmessage({ data: message } as MessageEvent<unknown>);
 };
 
 afterEach(() => {
@@ -56,7 +56,7 @@ describe('export worker', () => {
     const workerSelf = await loadWorker();
 
     await sendMessage(workerSelf, { type: 'INIT' });
-    await sendMessage(workerSelf, { type: 'ADD_FILE' } as ExportWorkerRequest);
+    await sendMessage(workerSelf, { type: 'ADD_FILE' });
 
     expect(workerSelf.postMessage).toHaveBeenLastCalledWith({
       type: 'ERROR',
@@ -68,11 +68,37 @@ describe('export worker', () => {
     const workerSelf = await loadWorker();
 
     await sendMessage(workerSelf, { type: 'INIT' });
-    await sendMessage(workerSelf, { type: 'GENERATE_ZIP' } as ExportWorkerRequest);
+    await sendMessage(workerSelf, { type: 'GENERATE_ZIP' });
 
     expect(workerSelf.postMessage).toHaveBeenLastCalledWith({
       type: 'ERROR',
       payload: { message: 'GENERATE_ZIP payload is missing' },
+    });
+  });
+
+  it('reports a clear error when add file payload fields are invalid', async () => {
+    const workerSelf = await loadWorker();
+
+    await sendMessage(workerSelf, { type: 'INIT' });
+    await sendMessage(workerSelf, {
+      type: 'ADD_FILE',
+      payload: { filename: '', base64Data: 'aGVsbG8=' },
+    });
+
+    expect(workerSelf.postMessage).toHaveBeenLastCalledWith({
+      type: 'ERROR',
+      payload: { message: 'ADD_FILE payload must include a non-empty filename' },
+    });
+  });
+
+  it('reports a clear error when the message type is unknown', async () => {
+    const workerSelf = await loadWorker();
+
+    await sendMessage(workerSelf, { type: 'REMOVE_FILE' });
+
+    expect(workerSelf.postMessage).toHaveBeenCalledWith({
+      type: 'ERROR',
+      payload: { message: 'Unknown export worker message type: REMOVE_FILE' },
     });
   });
 });

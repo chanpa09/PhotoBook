@@ -14,8 +14,30 @@ import { createPageSlice } from '@/store/slices/createPageSlice';
 import { createPhotoSlice } from '@/store/slices/createPhotoSlice';
 import { createStampSlice } from '@/store/slices/createStampSlice';
 import { createProjectSlice } from '@/store/slices/createProjectSlice';
+import { createSelectionSlice } from '@/store/slices/createSelectionSlice';
 import { ProjectStoreSchema, type ValidatedProjectStore } from '@/store/schemas/projectSchema';
 import type { PageData } from '@/types';
+
+type TemporalProjectSnapshot = {
+  pages: PageData[];
+  settings: ProjectState['settings'];
+  currentPageIndex: number;
+};
+
+const createTemporalSnapshot = (state: ProjectState): TemporalProjectSnapshot => ({
+  pages: stripPhotoUrls(state.pages),
+  settings: state.settings,
+  currentPageIndex: state.currentPageIndex,
+});
+
+const areTemporalSnapshotsEqual = (
+  pastState: TemporalProjectSnapshot,
+  currentState: TemporalProjectSnapshot,
+) => (
+  pastState.currentPageIndex === currentState.currentPageIndex
+  && JSON.stringify(pastState.settings) === JSON.stringify(currentState.settings)
+  && JSON.stringify(pastState.pages) === JSON.stringify(currentState.pages)
+);
 
 export const useProjectStore = create<ProjectState>()(
   temporal(
@@ -25,6 +47,7 @@ export const useProjectStore = create<ProjectState>()(
         ...createPhotoSlice(...a),
         ...createStampSlice(...a),
         ...createProjectSlice(...a),
+        ...createSelectionSlice(...a),
       }),
       {
         name: 'photobook_storage_v2',
@@ -76,11 +99,8 @@ export const useProjectStore = create<ProjectState>()(
     {
       // Zundo options
       limit: 50, // Limit undo history to 50 steps
-      partialize: (state) => ({
-        pages: stripPhotoUrls(state.pages),
-        settings: state.settings,
-        currentPageIndex: state.currentPageIndex,
-      }),
+      partialize: createTemporalSnapshot,
+      equality: areTemporalSnapshotsEqual,
     }
   )
 );

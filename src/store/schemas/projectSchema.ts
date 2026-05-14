@@ -5,6 +5,10 @@ export const TextStyleSchema = z.object({
   fontFamily: z.string().optional(),
   fontSize: z.number().optional(),
   color: z.string().optional(),
+  textAlign: z.enum(['left', 'center', 'right', 'justify']).optional(),
+  fontWeight: z.union([z.enum(['normal', 'bold']), z.number()]).optional(),
+  fontStyle: z.enum(['normal', 'italic']).optional(),
+  backgroundColor: z.string().optional(),
   languageMode: z.enum(['auto', 'manual']).optional(),
   language: z.enum(['ko', 'ja', 'mixed']).optional(),
 });
@@ -17,6 +21,7 @@ export const LayoutTextSchema = z.object({
 export const PhotoSchema = z.object({
   id: z.string(),
   imageId: z.string().optional(),
+  originalImageId: z.string().optional(),
   url: z.string(),
   caption: z.string(),
   fit: z.enum(['contain', 'cover']).optional(),

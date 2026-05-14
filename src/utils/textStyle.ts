@@ -50,6 +50,10 @@ export const getDefaultTextStyle = (fontSize: number): Required<TextStyle> => ({
   fontFamily: '',
   fontSize,
   color: '#000000',
+  textAlign: 'center',
+  fontWeight: 'normal',
+  fontStyle: 'normal',
+  backgroundColor: 'transparent',
   languageMode: 'auto',
   language: 'mixed',
 });
@@ -78,6 +82,10 @@ export const resolveTextStyle = (
     style: {
       fontFamily,
       fontSize: `${nextStyle.fontSize}px`,
+      textAlign: nextStyle.textAlign,
+      fontWeight: nextStyle.fontWeight,
+      fontStyle: nextStyle.fontStyle,
+      backgroundColor: nextStyle.backgroundColor,
     },
     lang: language === 'mixed' ? undefined : language,
     values: {

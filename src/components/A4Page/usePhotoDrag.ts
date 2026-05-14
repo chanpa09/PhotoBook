@@ -4,7 +4,10 @@ import { getNextPhotoDragOffset } from '@/utils/photoDrag';
 import { A4_PAGE_WIDTH } from '@/utils/stamps';
 import type { PageData } from '@/types';
 
-export function usePhotoDrag(page: PageData, updatePhotoTransform: (pageId: string, index: number, transform: { offset: { x: number; y: number } }) => void) {
+export function usePhotoDrag(
+  page: PageData,
+  updatePhotoTransform: (pageId: string, index: number, transform: { scale?: number; offset?: { x: number; y: number } }) => void
+) {
   const isDraggingPhoto = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
   const activePhotoIndex = useRef<number | null>(null);
@@ -31,6 +34,20 @@ export function usePhotoDrag(page: PageData, updatePhotoTransform: (pageId: stri
     dragOffset.current = { x: photo.offset?.x || 0, y: photo.offset?.y || 0 };
     event.currentTarget.setPointerCapture?.(event.pointerId);
     event.preventDefault();
+  };
+
+  const handlePhotoWheel = (event: React.WheelEvent<HTMLElement>, index: number) => {
+    const photo = page.photos[index];
+    if (!photo) return;
+
+    event.preventDefault();
+    const delta = -event.deltaY;
+    const factor = 1.1;
+    const currentScale = photo.scale || 1;
+    const nextScale = delta > 0 ? currentScale * factor : currentScale / factor;
+    const clampedScale = Math.min(Math.max(nextScale, 0.5), 5);
+
+    updatePhotoTransform(page.id, index, { scale: clampedScale });
   };
 
   useEffect(() => {
@@ -85,5 +102,5 @@ export function usePhotoDrag(page: PageData, updatePhotoTransform: (pageId: stri
     };
   }, [page.id, updatePhotoTransform]);
 
-  return { handlePhotoPointerDown };
+  return { handlePhotoPointerDown, handlePhotoWheel };
 }

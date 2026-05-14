@@ -44,8 +44,10 @@ export interface PhotoSlice {
 export interface StampSlice {
   addStamp: (pageId: string, stamp: StampAsset) => void;
   addStampAt: (pageId: string, stamp: StampAsset, position: { x: number; y: number }) => void;
+  addStampInstance: (pageId: string, stamp: StampInstance, position?: { x: number; y: number }) => void;
   updateStamp: (pageId: string, instanceId: string, updates: Partial<StampInstance>) => void;
   removeStamp: (pageId: string, instanceId: string) => void;
+  duplicateStamp: (pageId: string, instanceId: string, position?: { x: number; y: number }) => void;
   bringStampToFront: (pageId: string, instanceId: string) => void;
   bringStampForward: (pageId: string, instanceId: string) => void;
   sendStampBackward: (pageId: string, instanceId: string) => void;
@@ -66,4 +68,12 @@ export interface ProjectSlice {
   loadLegacyData: () => Promise<void>;
 }
 
-export type ProjectState = PageSlice & PhotoSlice & StampSlice & ProjectSlice;
+export interface SelectionSlice {
+  selectedStampId: { pageId: string; instanceId: string } | null;
+  selectedPhoto: { pageId: string; photoIndex: number } | null;
+  setSelectedStampId: (selection: { pageId: string; instanceId: string } | null) => void;
+  setSelectedPhoto: (selection: { pageId: string; photoIndex: number } | null) => void;
+  clearSelection: () => void;
+}
+
+export type ProjectState = PageSlice & PhotoSlice & StampSlice & ProjectSlice & SelectionSlice;

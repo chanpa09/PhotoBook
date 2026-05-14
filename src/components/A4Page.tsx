@@ -1,7 +1,7 @@
 import { useState, type ChangeEvent, type DragEvent, type RefObject } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useProjectStore } from '@/store/useProjectStore';
-import { saveImage, createObjectUrlFromBlob } from '@/utils/imageStore';
+import { saveImage, saveOriginalImage, createObjectUrlFromBlob } from '@/utils/imageStore';
 import { resizeImage, DEFAULT_IMAGE_MAX_RESOLUTION } from '@/utils/imageResize';
 import type { AppText } from '@/i18n';
 import type { Photo, ProjectSettings, PageData, StampAsset, TextTarget } from '@/types';
@@ -50,7 +50,7 @@ export function A4Page({
   );
   const [dragActiveIndex, setDragActiveIndex] = useState<number | null>(null);
   
-  const { handlePhotoPointerDown } = usePhotoDrag(page, updatePhotoTransform);
+  const { handlePhotoPointerDown, handlePhotoWheel } = usePhotoDrag(page, updatePhotoTransform);
 
   const shouldShowPrintWarrantyGuide = showPrintWarrantyGuide ?? settings.showPrintWarrantyGuide ?? true;
 
@@ -58,14 +58,20 @@ export function A4Page({
     if (!file.type.startsWith('image/')) return;
 
     try {
+      const originalImageId = crypto.randomUUID();
       const imageId = crypto.randomUUID();
-      const maxRes = settings.imageMaxResolution ?? DEFAULT_IMAGE_MAX_RESOLUTION;
-      const resized = await resizeImage(file, maxRes);
+      const maxResolution = settings.imageMaxResolution ?? DEFAULT_IMAGE_MAX_RESOLUTION;
+
+      await saveOriginalImage(originalImageId, file);
+
+      const resized = await resizeImage(file, maxResolution);
       await saveImage(imageId, resized);
+
       const url = createObjectUrlFromBlob(resized, imageId);
       updatePhoto(page.id, index, {
         id: crypto.randomUUID(),
         imageId,
+        originalImageId,
         url,
         caption: '',
         fit: 'contain',
@@ -73,7 +79,7 @@ export function A4Page({
         offset: { x: 0, y: 0 },
       });
     } catch (error) {
-      console.error('Failed to load image', error);
+      console.error('Failed to process image:', error);
       onError?.(text.imageLoadError);
     }
   };
@@ -191,6 +197,7 @@ export function A4Page({
     onDragOver: handleDragOver,
     onDragLeave: handleDragLeave,
     onPhotoPointerDown: handlePhotoPointerDown,
+    onPhotoWheel: handlePhotoWheel,
     onToggleFit: handleToggleFit,
     onRemovePhoto: handleRemovePhoto,
     onZoomChange: handleZoomChange,

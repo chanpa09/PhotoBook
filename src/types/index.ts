@@ -24,6 +24,10 @@ export interface TextStyle {
   fontFamily?: string;
   fontSize?: number;
   color?: string;
+  textAlign?: 'left' | 'center' | 'right' | 'justify';
+  fontWeight?: 'normal' | 'bold' | number;
+  fontStyle?: 'normal' | 'italic';
+  backgroundColor?: string;
   languageMode?: TextLanguageMode;
   language?: TextLanguage;
 }
@@ -36,6 +40,7 @@ export interface LayoutText {
 export interface Photo {
   id: string;
   imageId?: string; // Reference key for Blob storage (imageStore)
+  originalImageId?: string; // Reference key for original high-res Blob storage
   url: string; // Runtime display URL (ObjectURL or base64 for legacy)
   caption: string;
   fit?: 'contain' | 'cover';

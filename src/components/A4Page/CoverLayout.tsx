@@ -22,6 +22,7 @@ interface Props {
   onDragOver: (event: DragEvent<HTMLDivElement>, index: number) => void;
   onDragLeave: (event: DragEvent<HTMLDivElement>) => void;
   onPhotoPointerDown: (event: ReactPointerEvent<HTMLElement>, index: number) => void;
+  onPhotoWheel: (event: React.WheelEvent<HTMLElement>, index: number) => void;
   onToggleFit: (index: number, currentPhoto: Photo) => void;
   onRemovePhoto: (index: number) => void;
   onZoomChange: (index: number, scale: number) => void;
@@ -41,6 +42,7 @@ export function CoverLayout({
   onDragOver,
   onDragLeave,
   onPhotoPointerDown,
+  onPhotoWheel,
   onToggleFit,
   onRemovePhoto,
   onZoomChange,
@@ -112,6 +114,7 @@ export function CoverLayout({
             <div 
               className="w-full h-full relative overflow-hidden flex items-center justify-center cursor-move touch-none"
               onPointerDown={(event) => onPhotoPointerDown(event, 0)}
+              onWheel={(event) => onPhotoWheel(event, 0)}
               onClick={handlePhotoClick}
             >
               <img

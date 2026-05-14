@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { toJpeg, toPng } from 'html-to-image';
+import { loadOriginalImageBlob } from '@/utils/imageStore';
 import type { ExportMessages } from '@/i18n';
 import type { PageData, ProjectSettings } from '@/types';
 import { getExportGroups, isTwoPageSpread } from '@/utils/layout';
@@ -95,6 +96,45 @@ const waitForImages = async (element: HTMLElement) => {
   }));
 };
 
+const swapToHighResImages = (element: HTMLElement, pages: PageData[]) => {
+  const hasOriginalImages = pages.some((page) =>
+    page.photos.some((photo) => Boolean(photo?.originalImageId)),
+  );
+  if (!hasOriginalImages) return undefined;
+
+  const images = Array.from(element.querySelectorAll('img[data-photo-index]'));
+  const urlsToRevoke: string[] = [];
+  const originalSources: Array<{ image: HTMLImageElement; src: string }> = [];
+
+  return Promise.all(images.map(async (img) => {
+    const htmlImg = img as HTMLImageElement;
+    if (typeof htmlImg.getAttribute !== 'function') return;
+
+    const pageId = htmlImg.getAttribute('data-page-id');
+    const photoIndex = Number.parseInt(htmlImg.getAttribute('data-photo-index') || '-1', 10);
+
+    if (pageId && photoIndex >= 0) {
+      const page = pages.find(p => p.id === pageId);
+      const photo = page?.photos[photoIndex];
+
+      if (photo?.originalImageId) {
+        const blob = await loadOriginalImageBlob(photo.originalImageId);
+        if (blob) {
+          const highResUrl = URL.createObjectURL(blob);
+          originalSources.push({ image: htmlImg, src: htmlImg.src });
+          htmlImg.src = highResUrl;
+          urlsToRevoke.push(highResUrl);
+        }
+      }
+    }
+  })).then(() => () => {
+    originalSources.forEach(({ image, src }) => {
+      image.src = src;
+    });
+    urlsToRevoke.forEach(url => URL.revokeObjectURL(url));
+  });
+};
+
 async function runExportWorker<TType extends ExportWorkerRequest['type']>(
   worker: Worker,
   type: TType,
@@ -177,6 +217,7 @@ export async function exportRenderedPages({
 
       onProgress(createExportProgress(groupIndex + 1, exportGroups.length, label));
 
+      let revokeHighRes: (() => void) | undefined;
       const options = {
         quality: 0.95,
         pixelRatio: 2,
@@ -189,6 +230,8 @@ export async function exportRenderedPages({
 
       let dataUrl: string;
       try {
+        const highResSwap = swapToHighResImages(element, pages);
+        revokeHighRes = highResSwap ? await highResSwap : undefined;
         await waitForFonts();
         await waitForImages(element);
         dataUrl = format === 'png'
@@ -198,6 +241,8 @@ export async function exportRenderedPages({
         throw new Error(messages.pageSaveFailed(groupIndex + 1, format.toUpperCase(), getErrorMessage(error)), {
           cause: error,
         });
+      } finally {
+        revokeHighRes?.();
       }
 
       const filename = `photobook-page-${label}.${format}`;
