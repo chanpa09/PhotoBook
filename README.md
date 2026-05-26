@@ -22,6 +22,7 @@
 - 작업 파일(`.photobook`) 저장과 불러오기
 - 전체 페이지 PNG/JPEG 저장
 - 개별 파일 다운로드 또는 ZIP 묶음 저장
+- PWA 지원 (앱 설치 및 오프라인 캐싱)
 
 ## 실행 방법
 
@@ -63,6 +64,10 @@ npm run sync:stamps
 - `npm run test:e2e`: 프로덕션 빌드 후 Playwright E2E 테스트 실행
 - `npm run sync:stamps`: 스탬프 데이터를 동기화하는 스크립트 실행
 
+## 자동 배포 (CI/CD)
+
+이 프로젝트는 GitHub Actions를 통해 지속적 통합 및 배포가 설정되어 있습니다. `main` 브랜치에 푸시가 발생하면 자동으로 코드 린트, 단위 테스트, 빌드를 수행한 뒤, **GitHub Pages**로 배포됩니다. 배포 스크립트는 `.github/workflows/deploy.yml`에 작성되어 있습니다.
+
 ## 프로젝트 구조
 
 - `src/components`: 편집기 화면, 사이드바, A4 페이지, 모달 UI
@@ -94,3 +99,4 @@ npm run sync:stamps
 - Vitest
 - Playwright
 - vite-plugin-pwa
+- GitHub Actions (CI/CD & GitHub Pages)
