@@ -20,6 +20,20 @@ export const clampStampScale = (scale: number) =>
 
 export const serializeStampDragData = (stamp: StampAsset) => JSON.stringify(stamp);
 
+export const resolveStampAssetUrl = (url: string) => {
+  if (/^(?:[a-z][a-z\d+\-.]*:)?\/\//i.test(url) || !url.startsWith('/')) {
+    return url;
+  }
+
+  return `${import.meta.env.BASE_URL}${url.slice(1)}`;
+};
+
+export const resolveStampAssetUrls = (stamp: StampAsset): StampAsset => ({
+  ...stamp,
+  thumbnailUrl: resolveStampAssetUrl(stamp.thumbnailUrl),
+  imageUrl: resolveStampAssetUrl(stamp.imageUrl),
+});
+
 export const parseStampDragData = (dataTransfer: DataTransfer): StampAsset | null => {
   const rawData = dataTransfer.getData(STAMP_DRAG_MIME_TYPE);
   if (!rawData) return null;

@@ -6,6 +6,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: process.env.VITE_BASE_PATH ?? '/',
   plugins: [
     react(),
     tailwindcss(),
@@ -17,7 +18,7 @@ export default defineConfig({
         globIgnores: ['**/data/stamps/assets/**'],
         runtimeCaching: [
           {
-            urlPattern: ({ url }) => url.pathname === '/data/stamps/stamps.json',
+            urlPattern: ({ url }) => url.pathname.endsWith('/data/stamps/stamps.json'),
             handler: 'NetworkFirst',
             options: {
               cacheName: 'stamp-manifest',
@@ -28,7 +29,7 @@ export default defineConfig({
             },
           },
           {
-            urlPattern: ({ url }) => url.pathname.startsWith('/data/stamps/assets/'),
+            urlPattern: ({ url }) => url.pathname.includes('/data/stamps/assets/'),
             handler: 'CacheFirst',
             options: {
               cacheName: 'stamp-assets',

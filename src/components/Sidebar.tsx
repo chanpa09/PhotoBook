@@ -28,6 +28,7 @@ import type { AppText } from '@/i18n';
 import { useProjectStore } from '@/store/useProjectStore';
 import type { FrameLayoutDefinition, StampAsset, TextStyle, TextTarget } from '@/types';
 import { getSpreadStartIndex } from '@/utils/layout';
+import { resolveStampAssetUrls } from '@/utils/stamps';
 import { FONT_OPTIONS } from '@/utils/textStyle';
 import {
   createProjectArchive,
@@ -199,12 +200,12 @@ export function Sidebar({
     const loadStamps = async () => {
       setStampStatus('loading');
       try {
-        const response = await fetch('/data/stamps/stamps.json');
+        const response = await fetch(`${import.meta.env.BASE_URL}data/stamps/stamps.json`);
         if (!response.ok) {
           throw new Error(`Failed to load stamps: ${response.status}`);
         }
         const manifest = await response.json() as StampManifest;
-        setStampAssets(manifest.stamps ?? []);
+        setStampAssets((manifest.stamps ?? []).map(resolveStampAssetUrls));
         setStampStatus('ready');
       } catch (error) {
         console.error('Failed to load stamps', error);
